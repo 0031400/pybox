@@ -4,7 +4,7 @@ from ..utils.network import relay, close_writer
 import ipaddress
 
 
-class VLess:
+class VLessInbound:
     def __init__(self, uuids: list[str], listen_addr: str, listen_port: int) -> None:
         self.uuids = uuids
         self.listen_addr = listen_addr

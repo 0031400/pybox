@@ -2,8 +2,12 @@ import argparse
 import asyncio
 import ipaddress
 
-from .inbounds.socks5 import Socks5
-from .inbounds.vless import VLess
+from pybox.inbounds import inbound
+
+from .common.core import Core
+from .inbounds.listeners.tcp_listener import TcpListener
+from .inbounds.socks5 import Socks5Inbound
+from .inbounds.vless import VLessInbound
 
 
 class App:
@@ -11,9 +15,11 @@ class App:
         pass
 
     async def run(self):
-        socks5 = Socks5({}, "localhost", 4000)
-        vless = VLess(["04e5d30d-7ccb-49b3-ad5f-4b07d45d8dfd".replace('-','')], "localhost", 3000)
-        await asyncio.gather(socks5.run(),vless.run())
+        listener = TcpListener("localhost", 3000)
+        socks5 = Socks5Inbound(listener, {})
+        core = Core([socks5])
+        await core.start()
+        await core.run()
 
 
 def main():
