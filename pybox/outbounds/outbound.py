@@ -1,5 +1,10 @@
-from typing import Protocol
+from abc import ABC, abstractmethod
+
+from ..common.address import Destination
+from ..connections.connection import Connection
 
 
-class Outbound(Protocol):
-    pass
+class Outbound(ABC):
+    @abstractmethod
+    async def connect(self,destination:Destination)->Connection:
+        ...

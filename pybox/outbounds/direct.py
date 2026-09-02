@@ -1,8 +1,15 @@
+import asyncio
+
 from ..common.address import Destination
-from ..transports.tcp import TcpTransport
-from ..transports.transport import Transport
+
+from ..connections.connection import Connection
+from ..connections.tcp_connection import TcpConnection
+from .outbound import Outbound
 
 
-class DirectOutbound:
-    async def connect(self, destination: Destination) -> "Transport":
-        return await TcpTransport.connect(destination)
+class DirectOutbound(Outbound):
+    async def connect(self, destination: Destination) -> Connection:
+        reader, writer = await asyncio.open_connection(
+            destination.address, destination.port
+        )
+        return TcpConnection(reader, writer)

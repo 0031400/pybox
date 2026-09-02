@@ -8,6 +8,8 @@ from .common.core import Core
 from .inbounds.listeners.tcp_listener import TcpListener
 from .inbounds.socks5 import Socks5Inbound
 from .inbounds.vless import VLessInbound
+from .outbounds.direct import DirectOutbound
+from .outbounds.outbound import Outbound
 
 
 class App:
@@ -17,7 +19,7 @@ class App:
     async def run(self):
         listener = TcpListener("localhost", 3000)
         socks5 = Socks5Inbound(listener, {})
-        core = Core([socks5])
+        core = Core([socks5], {"direct": DirectOutbound()})
         await core.start()
         await core.run()
 
