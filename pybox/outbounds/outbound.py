@@ -6,5 +6,6 @@ from ..connections.connection import Connection
 
 class Outbound(ABC):
     @abstractmethod
-    async def connect(self,destination:Destination)->Connection:
-        ...
+    async def connect(
+        self, destination: Destination, first_data: bytes
+    ) -> Connection: ...

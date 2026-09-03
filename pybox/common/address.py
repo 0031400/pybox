@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+import ipaddress
 
 
 class AddressType(Enum):
@@ -13,3 +14,13 @@ class Destination:
     type: AddressType
     address: str
     port: int
+    def authority(self)->str:
+        try:
+            ip=ipaddress.ip_address(self.address)
+        except ValueError:
+            return f"{self.address}:{self.port}"
+        if ip.version==6:
+            return f"[{self.address}]:{self.port}"
+        else:
+            return f"{self.address}:{self.port}"
+

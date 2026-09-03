@@ -28,9 +28,10 @@ class Core:
             asyncio.create_task(self._handle_session(session))
 
     async def _handle_session(self, session: Session):
-        outbound = self.outbounds["direct"]
+        first_data=await session.connection.read(4096)
+        outbound = self.outbounds["final"]
         try:
-            remote = await outbound.connect(session.destination)
+            remote = await outbound.connect(session.destination,first_data)
             await relay(session.connection, remote)
         except Exception:
             await session.connection.close()

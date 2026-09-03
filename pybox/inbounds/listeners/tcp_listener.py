@@ -2,7 +2,7 @@ import asyncio
 
 from pybox.connections.connection import Connection
 
-from ...connections.tcp_connection import TcpConnection
+from ...connections.tcp import TcpConnection
 from .listener import Listener
 
 
