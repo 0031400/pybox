@@ -6,13 +6,12 @@ from .address import AddressType, Destination
 
 
 @dataclass
-class RouteRule:
+class Rule:
     domain: list[str]
     domain_suffix: list[str]
     domain_keyword: list[str]
     domain_regex: list[re.Pattern[str]]
     ip_cidr: list[str]
-    outbound: str
 
     def match_domain(self, domain: str) -> bool:
         domain = domain.lower().rstrip(".")
@@ -58,13 +57,34 @@ class RouteRule:
 
 
 @dataclass
+class RouteRule:
+    rule: Rule | None
+    rule_sets: list[str]
+    outbound: str
+
+
+@dataclass
 class Router:
-    def __init__(self, rules: list[RouteRule], final: str) -> None:
+    def __init__(
+        self, rules: list[RouteRule], rule_sets: dict[str, list[Rule]], final: str
+    ) -> None:
         self.rules = rules
+        self.rule_sets = rule_sets
         self.final = final
 
     def route(self, destination: Destination) -> str:
         for rule in self.rules:
-            if rule.match(destination):
+            if self.match(rule, destination):
                 return rule.outbound
         return self.final
+
+    def match(self, route_rule: RouteRule, destination: Destination) -> bool:
+        if route_rule.rule is not None:
+            if route_rule.rule.match(destination):
+                return True
+        for rule_set_tag in route_rule.rule_sets:
+            rules = self.rule_sets[rule_set_tag]
+            for rule in rules:
+                if rule.match(destination):
+                    return True
+        return False

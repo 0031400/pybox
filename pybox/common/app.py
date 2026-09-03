@@ -1,3 +1,4 @@
+import json
 import re
 
 from ..inbounds.inbound import Inbound
@@ -5,18 +6,26 @@ from ..inbounds.mixed import MixedInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
-from .config import InboundConfig, RouteConfig, RouteRuleConfig, load_config
+from .config import (
+    InboundConfig,
+    RouteConfig,
+    OutboundConfig,
+    RuleConfig,
+    RouteRuleConfig,
+    RuleSetConfig,
+    load_config,
+    parse_rule,
+)
 
-from ..common.address import Destination
-from ..common.config import load_config, OutboundConfig
-from ..common.core import Core
+from .address import Destination
+from .core import Core
 from ..inbounds.listeners.tcp_listener import TcpListener
 from ..outbounds.direct import DirectOutbound
 from ..outbounds.outbound import Outbound
 from ..outbounds.transports.ws import WsTransport
 from ..outbounds.transports.wss import WssTransport
 from ..outbounds.vless import VlessOutbound
-from .router import RouteRule, Router
+from .router import RouteRule, Router, Rule
 
 
 class App:
@@ -83,16 +92,49 @@ def create_outbound(config: OutboundConfig) -> Outbound:
         raise RuntimeError("unsupport outbound type")
 
 
-def create_route(config: RouteRuleConfig) -> RouteRule:
-    return RouteRule(
+def load_rule_set(config: RuleSetConfig) -> list[Rule]:
+    if config.type != "local" or config.format != "source":
+        raise RuntimeError("unsupport rule set type")
+    with open(config.path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    rules: list[Rule] = []
+    for rule in data["rules"]:
+        rules.append(create_rule(parse_rule(rule)))
+    return rules
+
+
+def create_rule(config: RuleConfig) -> Rule:
+    return Rule(
         config.domain,
         config.domain_suffix,
         config.domain_keyword,
         [re.compile(item) for item in config.domain_regex],
         config.ip_cidr,
+    )
+
+
+def create_route_rule(config: RouteRuleConfig) -> RouteRule:
+    rule: Rule | None = None
+    if config.rule:
+        rule = create_rule(config.rule)
+    return RouteRule(
+        rule,
+        config.rule_set,
         config.outbound,
     )
 
 
 def create_router(config: RouteConfig) -> Router:
-    return Router([create_route(item) for item in config.rules], config.final)
+    rule_sets = {item.tag: load_rule_set(item) for item in config.rule_sets}
+    rules: list[RouteRule] = []
+    for item in config.rules:
+        rule = create_route_rule(item)
+        for rule_set_tag in rule.rule_sets:
+            if rule_set_tag not in rule_sets:
+                raise RuntimeError("rule set not exist")
+        rules.append(rule)
+    return Router(
+        rules,
+        rule_sets,
+        config.final,
+    )

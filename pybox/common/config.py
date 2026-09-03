@@ -34,19 +34,42 @@ class OutboundConfig:
     tls: TlsConfig | None
 
 
+def normalize_list(data: str | list[str] | None) -> list[str]:
+    if data is None:
+        return []
+    if isinstance(data, str):
+        return [data]
+    return data
+
+
+@dataclass
+class RuleConfig:
+    domain_suffix: list[str]
+    domain: list[str]
+    domain_keyword: list[str]
+    domain_regex: list[str]
+    ip_cidr: list[str]
+
+
 @dataclass
 class RouteRuleConfig:
-    domain_suffix: list[str] = field(default_factory=list)
-    domain: list[str] = field(default_factory=list)
-    domain_keyword: list[str] = field(default_factory=list)
-    domain_regex: list[str] = field(default_factory=list)
-    ip_cidr: list[str] = field(default_factory=list)
-    outbound: str = ""
+    rule: RuleConfig | None
+    rule_set: list[str]
+    outbound: str
+
+
+@dataclass
+class RuleSetConfig:
+    tag: str
+    type: str
+    format: str
+    path: str
 
 
 @dataclass
 class RouteConfig:
-    rules: list[RouteRuleConfig] = field(default_factory=list)
+    rules: list[RouteRuleConfig]
+    rule_sets: list[RuleSetConfig]
     final: str = ""
 
 
@@ -105,13 +128,31 @@ def parse_outbound(data: dict) -> OutboundConfig:
     )
 
 
+def parse_rule(data: dict) -> RuleConfig:
+    return RuleConfig(
+        normalize_list(data.get("domain_suffix")),
+        normalize_list(data.get("domain")),
+        normalize_list(data.get("domain_keyword")),
+        normalize_list(data.get("domain_regex")),
+        normalize_list(data.get("ip_cidr")),
+    )
+
+
 def parse_route_rule(data: dict) -> RouteRuleConfig:
     return RouteRuleConfig(
-        data.get("domain_suffix", []), data.get("ip_cidr", []), data["outbound"]
+        parse_rule(data),
+        normalize_list(data.get("rule_set")),
+        data["outbound"],
     )
+
+
+def parse_rule_set(data: dict) -> RuleSetConfig:
+    return RuleSetConfig(data["tag"], data["type"], data["format"], data["path"])
 
 
 def parse_route(data: dict) -> RouteConfig:
     return RouteConfig(
-        [parse_route_rule(item) for item in data.get("rules", [])], data["final"]
+        [parse_route_rule(item) for item in data.get("rules", [])],
+        [parse_rule_set(item) for item in data.get("rule_set", [])],
+        data["final"],
     )
