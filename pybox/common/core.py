@@ -36,11 +36,15 @@ class Core:
         outbound = self.outbounds.get(outbound_tag)
         if outbound is None:
             raise RuntimeError("outbound not exist")
+        print(f"{session.destination.authority()} -> {outbound_tag}")
         try:
             remote = await outbound.connect(session.destination, session.initial_data)
             await relay(session.connection, remote)
         except Exception:
-            await session.connection.close()
+            try:
+                await session.connection.close()
+            except (ConnectionError, OSError):
+                pass
 
 
 async def relay(left: Connection, right: Connection):
