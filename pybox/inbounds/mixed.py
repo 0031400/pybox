@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from urllib.parse import urlsplit
 from ..common.address import AddressType, Destination
 from ..connections.connection import Connection
 from ..common.session import Session
@@ -79,7 +80,9 @@ class MixedInbound(Inbound):
             data += chunk
             if len(data) > 64 * 1024:
                 raise RuntimeError("http header too big")
-        header = data.split(b"\r\n\r\n", 1)[0]
+        parts = data.split(b"\r\n\r\n", 1)
+        header = parts[0]
+        remaining = parts[1]
         lines = header.split(b"\r\n")
         if not lines:
             raise RuntimeError("invalid http header")
@@ -88,11 +91,24 @@ class MixedInbound(Inbound):
         if len(parts) != 3:
             raise RuntimeError("invalid http request line")
         method, target, version = parts
-        if method.upper() != "CONNECT":
-            raise RuntimeError("unsupport http method")
-        destination = Destination.from_authority(target)
-        await connection.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-        initial_data = await connection.read(4096)
+        if method.upper() == "CONNECT":
+            destination = Destination.from_authority(target)
+            await connection.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            initial_data = await connection.read(4096)
+            return Session(connection, destination, initial_data)
+        if not target.startswith(("http://", "https://")):
+            raise RuntimeError("invalid http proxy target")
+        uri = urlsplit(target)
+        if not uri.hostname:
+            raise RuntimeError("http proxy missing host")
+        destination = Destination.from_host_port(uri.hostname, uri.port or 80)
+        path = uri.path or "/"
+        if uri.query:
+            path += "?" + uri.query
+        result = [f"{method} {path} {version}".encode("latin-1")]
+        for line in lines[1:]:
+            result.append(line)
+        initial_data = b"\r\n".join(result) + b"\r\n\r\n" + remaining
         return Session(connection, destination, initial_data)
 
     async def _handshake(self, connection: Connection) -> Session:
