@@ -5,8 +5,10 @@ from turtle import width
 from ..connections.connection import Connection
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
+from .address import AddressType
 from .router import Router
 from .session import Session
+from .sniff import sniff_tls_hostname
 
 
 class Core:
@@ -36,7 +38,12 @@ class Core:
         outbound = self.outbounds.get(outbound_tag)
         if outbound is None:
             raise RuntimeError("outbound not exist")
-        print(f"{session.destination.authority()} -> {outbound_tag}")
+        hostname = sniff_tls_hostname(session.initial_data)
+        if hostname and session.destination.type != AddressType.DOMAIN:
+            print(f"[sniff] {session.destination.authority()} -> {hostname}")
+            session.destination.type = AddressType.DOMAIN
+            session.destination.address = hostname
+        print(f"[route] {session.destination.authority()} -> {outbound_tag}")
         try:
             remote = await outbound.connect(session.destination, session.initial_data)
             await relay(session.connection, remote)

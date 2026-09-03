@@ -44,13 +44,13 @@ class App:
         if self.config.system_proxy and self.config.system_proxy.enabled:
             self.system_proxy = WindowsProxy(self.config.system_proxy.server)
             self.system_proxy.enable()
-            print(f"set windows proxy: {self.system_proxy.server}")
+            print(f"[system proxy] set: {self.system_proxy.server}")
         try:
             await core.run()
         finally:
             if self.system_proxy:
                 self.system_proxy.disable()
-                print("unset system proxy")
+                print("[system proxy] unset")
 
 
 def create_inbound(config: InboundConfig) -> Inbound:
