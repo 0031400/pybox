@@ -1,6 +1,7 @@
 import re
 
 from ..inbounds.inbound import Inbound
+from ..inbounds.mixed import MixedInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
@@ -39,6 +40,11 @@ def create_inbound(config: InboundConfig) -> Inbound:
             raise RuntimeError("socks5 inbound error")
         listener = TcpListener(config.listen, config.listen_port)
         return Socks5Inbound(listener, {})
+    elif config.type == "mixed":
+        if config.listen_port is None or config.listen is None:
+            raise RuntimeError("socks5 inbound error")
+        listener = TcpListener(config.listen, config.listen_port)
+        return MixedInbound(listener)
     raise RuntimeError("unsupport inbound type")
 
 

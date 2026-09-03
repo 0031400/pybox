@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 import ipaddress
+from urllib.parse import urlsplit
 
 
 class AddressType(Enum):
@@ -35,3 +36,10 @@ class Destination:
         except ValueError:
             type = AddressType.DOMAIN
         return Destination(type, host, port)
+
+    @classmethod
+    def from_authority(cls, authority: str) -> "Destination":
+        parsed = urlsplit(f"//{authority}")
+        if parsed.hostname is None or parsed.port is None:
+            raise RuntimeError("in valid authority")
+        return cls.from_host_port(parsed.hostname, parsed.port)
