@@ -1,6 +1,7 @@
 import re
 
 from ..inbounds.inbound import Inbound
+from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
 from .config import InboundConfig, RouteConfig, RouteRuleConfig, load_config
@@ -42,7 +43,11 @@ def create_inbound(config: InboundConfig) -> Inbound:
 
 
 def create_outbound(config: OutboundConfig) -> Outbound:
-    if config.type == "vless":
+    if config.type == "block":
+        return BlockOutbound()
+    if config.type == "direct":
+        return DirectOutbound()
+    elif config.type == "vless":
         if config.server is None or config.server_port is None or config.uuid is None:
             raise RuntimeError("vless outbound error")
         if config.transport is None or config.transport.type == "tcp":
@@ -74,8 +79,6 @@ def create_outbound(config: OutboundConfig) -> Outbound:
             config.uuid,
             transport,
         )
-    elif config.type == "direct":
-        return DirectOutbound()
     else:
         raise RuntimeError("unsupport outbound type")
 
