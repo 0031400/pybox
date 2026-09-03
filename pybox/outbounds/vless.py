@@ -10,7 +10,7 @@ from .transports.transport import Transport
 class VlessOutbound(Outbound):
     def __init__(self, server: Destination, uuid: str, transport: Transport) -> None:
         self.server = server
-        self.uuid = uuid
+        self.uuid = uuid.replace("-", "")
         self.transport = transport
 
     async def connect(self, destination: Destination, first_data: bytes) -> Connection:
