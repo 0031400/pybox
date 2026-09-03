@@ -1,3 +1,5 @@
+import re
+
 from ..inbounds.inbound import Inbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
@@ -79,7 +81,14 @@ def create_outbound(config: OutboundConfig) -> Outbound:
 
 
 def create_route(config: RouteRuleConfig) -> RouteRule:
-    return RouteRule(config.domain_suffix, config.ip_cidr, config.outbound)
+    return RouteRule(
+        config.domain,
+        config.domain_suffix,
+        config.domain_keyword,
+        [re.compile(item) for item in config.domain_regex],
+        config.ip_cidr,
+        config.outbound,
+    )
 
 
 def create_router(config: RouteConfig) -> Router:

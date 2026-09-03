@@ -4,7 +4,7 @@ from .common.app import App
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="pybox", description="A Network Tool")
     parser.add_argument(
         "-c", "--config", type=str, required=True, help="config file path"
     )

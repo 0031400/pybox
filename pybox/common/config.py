@@ -37,6 +37,9 @@ class OutboundConfig:
 @dataclass
 class RouteRuleConfig:
     domain_suffix: list[str] = field(default_factory=list)
+    domain: list[str] = field(default_factory=list)
+    domain_keyword: list[str] = field(default_factory=list)
+    domain_regex: list[str] = field(default_factory=list)
     ip_cidr: list[str] = field(default_factory=list)
     outbound: str = ""
 
