@@ -9,7 +9,10 @@
             "type": "debugpy",
             "request": "launch",
             "module": "pybox",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "args": [
+                "-c","data\\config.json"
+            ]
         }
     ]
 }

@@ -11,7 +11,6 @@ from ..common.address import Destination
 from ..common.config import load_config, OutboundConfig
 from ..common.core import Core
 from ..inbounds.listeners.tcp_listener import TcpListener
-from ..inbounds.socks5 import Socks5Inbound
 from ..outbounds.direct import DirectOutbound
 from ..outbounds.outbound import Outbound
 from ..outbounds.transports.ws import WsTransport
@@ -35,12 +34,7 @@ class App:
 
 
 def create_inbound(config: InboundConfig) -> Inbound:
-    if config.type == "socks5":
-        if config.listen_port is None or config.listen is None:
-            raise RuntimeError("socks5 inbound error")
-        listener = TcpListener(config.listen, config.listen_port)
-        return Socks5Inbound(listener, {})
-    elif config.type == "mixed":
+    if config.type == "mixed":
         if config.listen_port is None or config.listen is None:
             raise RuntimeError("socks5 inbound error")
         listener = TcpListener(config.listen, config.listen_port)

@@ -8,10 +8,10 @@ from .outbound import Outbound
 
 
 class DirectOutbound(Outbound):
-    async def connect(self, destination: Destination, first_data: bytes) -> Connection:
+    async def connect(self, destination: Destination,initial_data:bytes) -> Connection:
         reader, writer = await asyncio.open_connection(
             destination.address, destination.port
         )
         connection = TcpConnection(reader, writer)
-        await connection.write(first_data)
+        await connection.write(initial_data)
         return connection

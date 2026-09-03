@@ -1,12 +1,7 @@
-import asyncio
 from collections.abc import AsyncIterator
-from email import header
-from pydoc import describe
 from ..common.address import AddressType, Destination
 from ..connections.connection import Connection
 from ..common.session import Session
-from ..utils.address import host_port, get_ip_port
-from ..utils.network import close_writer, relay
 import ipaddress
 
 from .inbound import Inbound
@@ -24,18 +19,14 @@ class MixedInbound(Inbound):
         while True:
             connection = await self.listener.accept()
             try:
-                destination = await self._handshake(connection)
-                yield Session(connection=connection, destination=destination)
+                yield await self._handshake(connection)
             except Exception:
                 await connection.close()
 
     async def _socks5_handshake(
         self, connection: Connection, first_byte: bytes
-    ) -> Destination:
-        version = first_byte
+    ) -> Session:
         nmethods = (await connection.read_exactly(1))[0]
-        if version != 5:
-            raise RuntimeError(f"error socks5 version: {version}")
         auth_methods_bytes = await connection.read_exactly(nmethods)
         auth_ok = False
         for auth_method in auth_methods_bytes:
@@ -73,11 +64,13 @@ class MixedInbound(Inbound):
             raise RuntimeError("atyp error")
         port = int.from_bytes((await connection.read_exactly(2)), "big")
         await connection.write(bytes([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
-        return Destination(type=address_type, address=address, port=port)
+        initial_data = await connection.read(4096)
+        destination = Destination(type=address_type, address=address, port=port)
+        return Session(connection, destination, initial_data)
 
     async def _http_handshake(
         self, connection: Connection, first_byte: bytes
-    ) -> Destination:
+    ) -> Session:
         data = first_byte
         while b"\r\n\r\n" not in data:
             chunk = await connection.read(4096)
@@ -99,11 +92,12 @@ class MixedInbound(Inbound):
             raise RuntimeError("unsupport http method")
         destination = Destination.from_authority(target)
         await connection.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-        return destination
+        initial_data = await connection.read(4096)
+        return Session(connection, destination, initial_data)
 
-    async def _handshake(self, connection: Connection) -> Destination:
+    async def _handshake(self, connection: Connection) -> Session:
         first_byte = await connection.read_exactly(1)
-        if first_byte == 5:
+        if first_byte[0] == 5:
             return await self._socks5_handshake(connection, first_byte)
         else:
             return await self._http_handshake(connection, first_byte)

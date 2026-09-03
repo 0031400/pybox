@@ -13,7 +13,9 @@ class VlessOutbound(Outbound):
         self.uuid = uuid.replace("-", "")
         self.transport = transport
 
-    async def connect(self, destination: Destination, first_data: bytes) -> Connection:
+    async def connect(
+        self, destination: Destination, initial_data: bytes
+    ) -> Connection:
         connection = await self.transport.connect(self.server)
         match destination.type:
             case AddressType.IPV4:
@@ -33,7 +35,7 @@ class VlessOutbound(Outbound):
             + bytes([0, 1])
             + destination.port.to_bytes(2, "big")
             + address_bytes
-            + first_data
+            + initial_data
         )
         await connection.write(req_data)
         res_bytes = await connection.read_exactly(2)
