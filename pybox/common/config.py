@@ -34,6 +34,12 @@ class OutboundConfig:
     tls: TlsConfig | None
 
 
+@dataclass
+class SystemProxyConfig:
+    enabled: bool
+    server: str
+
+
 def normalize_list(data: str | list[str] | None) -> list[str]:
     if data is None:
         return []
@@ -78,6 +84,7 @@ class Config:
     inbounds: list[InboundConfig]
     outbounds: list[OutboundConfig]
     route: RouteConfig
+    system_proxy: SystemProxyConfig | None
 
 
 def load_config(path: str) -> Config:
@@ -86,11 +93,20 @@ def load_config(path: str) -> Config:
     return parse_config(data)
 
 
+def parse_system_proxy(data: dict) -> SystemProxyConfig:
+    return SystemProxyConfig(data["enabled"], data["server"])
+
+
 def parse_config(data: dict) -> Config:
+    system_proxy_data = data.get("system_proxy", None)
+    system_proxy: SystemProxyConfig | None = None
+    if system_proxy_data:
+        system_proxy = parse_system_proxy(system_proxy_data)
     return Config(
         [parse_inbound(item) for item in data["inbounds"]],
         [parse_outbound(item) for item in data["outbounds"]],
         parse_route(data["route"]),
+        system_proxy,
     )
 
 

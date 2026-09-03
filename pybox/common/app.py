@@ -6,6 +6,7 @@ from ..inbounds.mixed import MixedInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
+from ..platform.windows_proxy import WindowsProxy
 from .config import (
     InboundConfig,
     RouteConfig,
@@ -31,6 +32,7 @@ from .router import RouteRule, Router, Rule
 class App:
     def __init__(self, config_path: str) -> None:
         self.config = load_config(config_path)
+        self.system_proxy: WindowsProxy | None = None
 
     async def run(self):
         core = Core(
@@ -39,7 +41,16 @@ class App:
             create_router(self.config.route),
         )
         await core.start()
-        await core.run()
+        if self.config.system_proxy and self.config.system_proxy.enabled:
+            self.system_proxy = WindowsProxy(self.config.system_proxy.server)
+            self.system_proxy.enable()
+            print(f"set windows proxy: {self.system_proxy.server}")
+        try:
+            await core.run()
+        finally:
+            if self.system_proxy:
+                self.system_proxy.disable()
+                print("unset system proxy")
 
 
 def create_inbound(config: InboundConfig) -> Inbound:
