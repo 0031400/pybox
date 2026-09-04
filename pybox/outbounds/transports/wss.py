@@ -2,7 +2,7 @@ import ssl
 
 import websockets
 
-from pybox.connections.connection import Connection
+from ...connections.connection import Connection
 
 from ...common.address import AddressType, Destination
 from ...connections.ws import WsConnection

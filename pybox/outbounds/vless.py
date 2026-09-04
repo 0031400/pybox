@@ -1,6 +1,6 @@
 import ipaddress
 
-from pybox.connections.connection import Connection
+from ..connections.connection import Connection
 
 from ..common.address import Destination, AddressType
 from .outbound import Outbound

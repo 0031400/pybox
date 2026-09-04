@@ -3,9 +3,10 @@ import ssl
 
 import websockets
 
-from pybox.connections.connection import Connection
+from ...connections.connection import Connection
 
 from ...connections.ws import WsConnection
+from ...utils.address import format_socket_address
 from .listener import Listener
 
 
@@ -28,6 +29,8 @@ class WssListener(Listener):
         self.server = await websockets.serve(
             self._handle, self.host, self.port, ssl=ssl_context
         )
+        for sock in self.server.sockets:
+            print(f"[listen] wss://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, ws: websockets.ServerConnection):
         connection = WsConnection(ws)

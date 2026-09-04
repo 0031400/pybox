@@ -1,7 +1,7 @@
 import asyncio
 import ssl
 
-from pybox.connections.connection import Connection
+from ...connections.connection import Connection
 
 from ...common.address import Destination
 from ...connections.tcp import TcpConnection

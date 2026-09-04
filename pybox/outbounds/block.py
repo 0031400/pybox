@@ -1,5 +1,5 @@
-from pybox.common.address import Destination
-from pybox.connections.connection import Connection
+from ..common.address import Destination
+from ..connections.connection import Connection
 
 from .outbound import Outbound
 
