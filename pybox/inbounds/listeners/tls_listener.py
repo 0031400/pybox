@@ -33,6 +33,7 @@ class TlsListener(Listener):
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         connection = TcpConnection(reader, writer)
         await self.queue.put(connection)
+        await writer.wait_closed()
 
     async def accept(self) -> Connection:
         return await self.queue.get()

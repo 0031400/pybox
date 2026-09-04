@@ -1,7 +1,4 @@
 import asyncio
-from os import write
-from turtle import width
-
 from ..connections.connection import Connection
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
@@ -34,15 +31,15 @@ class Core:
             asyncio.create_task(self._handle_session(session))
 
     async def _handle_session(self, session: Session):
-        outbound_tag = self.router.route(session.destination)
-        outbound = self.outbounds.get(outbound_tag)
-        if outbound is None:
-            raise RuntimeError("outbound not exist")
         hostname = sniff_tls_hostname(session.initial_data)
         if hostname and session.destination.type != AddressType.DOMAIN:
             print(f"[sniff] {session.destination.authority()} -> {hostname}")
             session.destination.type = AddressType.DOMAIN
             session.destination.address = hostname
+        outbound_tag = self.router.route(session.destination)
+        outbound = self.outbounds.get(outbound_tag)
+        if outbound is None:
+            raise RuntimeError("outbound not exist")
         print(f"[route] {session.destination.authority()} -> {outbound_tag}")
         try:
             remote = await outbound.connect(session.destination, session.initial_data)

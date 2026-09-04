@@ -24,6 +24,7 @@ class WsListener(Listener):
     async def _handle(self, ws: websockets.ServerConnection):
         connection = WsConnection(ws)
         await self.queue.put(connection)
+        await ws.wait_closed()
 
     async def accept(self) -> Connection:
         return await self.queue.get()

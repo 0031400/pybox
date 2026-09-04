@@ -37,7 +37,7 @@ class VLessInbound(Inbound):
         version = (await connection.read_exactly(1))[0]
         if version != 0:
             raise RuntimeError("version error")
-        uuid = (await connection.read_exactly(16)).hex()
+        uuid = await connection.read_exactly(16)
         if uuid not in self.uuids:
             raise RuntimeError("auth error")
         protobuf_len = (await connection.read_exactly(1))[0]

@@ -5,7 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Python File",
+            "name": "server",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybox",
+            "console": "integratedTerminal",
+            "args": [
+                "-c","data\\server.json"
+            ]
+        },
+        {
+            "name": "client",
             "type": "debugpy",
             "request": "launch",
             "module": "pybox",

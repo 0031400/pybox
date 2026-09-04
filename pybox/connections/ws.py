@@ -13,7 +13,7 @@ class WsConnection(Connection):
     async def read(self, n: int = -1) -> bytes:
         while True:
             if self.buffer:
-                if n < 0:
+                if n <= 0:
                     data = bytes(self.buffer)
                     self.buffer.clear()
                     return data
