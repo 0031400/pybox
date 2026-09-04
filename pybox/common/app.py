@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 
 from ..inbounds.inbound import Inbound
 from ..inbounds.listeners.listener import Listener
@@ -11,7 +12,7 @@ from ..inbounds.vless import VLessInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
-from ..platform.windows_proxy import WindowsProxy
+from ..system_proxy.system_proxy import SystemProxy
 from .config import (
     InboundConfig,
     RouteConfig,
@@ -37,7 +38,7 @@ from .router import RouteRule, Router, Rule
 class App:
     def __init__(self, config_path: str) -> None:
         self.config = load_config(config_path)
-        self.system_proxy: WindowsProxy | None = None
+        self.system_proxy: SystemProxy | None = None
 
     async def run(self):
         core = Core(
@@ -47,7 +48,7 @@ class App:
         )
         await core.start()
         if self.config.system_proxy and self.config.system_proxy.enabled:
-            self.system_proxy = WindowsProxy(self.config.system_proxy.server)
+            self.system_proxy = SystemProxy(self.config.system_proxy.server)
             self.system_proxy.enable()
             print(f"[system proxy] set: {self.system_proxy.server}")
         try:
@@ -63,29 +64,28 @@ def create_listener(config: InboundConfig) -> Listener:
         raise RuntimeError("vless inbound error")
     if not config.transport or config.transport.type == "tcp":
         if not config.tls or not config.tls.enabled:
-            listener = TcpListener(config.listen, config.listen_port)
+            return TcpListener(config.listen, config.listen_port)
         else:
             if not config.tls.certificate_path or not config.tls.key_path:
                 raise RuntimeError("vless tls inbound error")
-            listener = TlsListener(
+            return TlsListener(
                 config.listen,
                 config.listen_port,
                 config.tls.certificate_path,
                 config.tls.key_path,
             )
-    elif config.transport.type=="ws":
+    elif config.transport.type == "ws":
         if not config.tls or not config.tls.enabled:
-            listener = WsListener(config.listen, config.listen_port)
+            return WsListener(config.listen, config.listen_port)
         else:
             if not config.tls.certificate_path or not config.tls.key_path:
                 raise RuntimeError("vless tls inbound error")
-            listener = WssListener(
+            return WssListener(
                 config.listen,
                 config.listen_port,
                 config.tls.certificate_path,
                 config.tls.key_path,
             )
-
     raise RuntimeError("listener unsupport")
 
 
