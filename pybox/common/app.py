@@ -46,7 +46,7 @@ class App:
             {item.tag: create_outbound(item) for item in self.config.outbounds},
             create_router(self.config.route),
         )
-        await core.start()
+        core.start()
         if self.config.system_proxy and self.config.system_proxy.enabled:
             self.system_proxy = SystemProxy(self.config.system_proxy.server)
             self.system_proxy.enable()
@@ -111,7 +111,6 @@ def create_outbound(config: OutboundConfig) -> Outbound:
         if config.server is None or config.server_port is None or config.uuid is None:
             raise RuntimeError("vless outbound error")
         if config.transport is None or config.transport.type == "tcp":
-
             if config.tls is None or config.tls.enabled == False:
                 transport = TcpTransport()
             else:

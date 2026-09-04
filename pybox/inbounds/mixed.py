@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
 from ..common.address import AddressType, Destination
@@ -12,17 +13,16 @@ from .listeners.listener import Listener
 class MixedInbound(Inbound):
     def __init__(self, listener: Listener) -> None:
         self.listener = listener
+        self.queue: asyncio.Queue[Session] = asyncio.Queue()
 
     async def start(self):
         await self.listener.start()
-
-    async def sessions(self) -> AsyncIterator[Session]:
         while True:
             connection = await self.listener.accept()
-            try:
-                yield await self._handshake(connection)
-            except Exception:
-                await connection.close()
+            asyncio.create_task(self._handshake(connection))
+
+    async def sessions(self) -> Session:
+        return await self.queue.get()
 
     async def _socks5_handshake(
         self, connection: Connection, first_byte: bytes
@@ -111,12 +111,13 @@ class MixedInbound(Inbound):
         initial_data = b"\r\n".join(result) + b"\r\n\r\n" + remaining
         return Session(connection, destination, initial_data)
 
-    async def _handshake(self, connection: Connection) -> Session:
+    async def _handshake(self, connection: Connection):
         first_byte = await connection.read_exactly(1)
         if first_byte[0] == 5:
-            return await self._socks5_handshake(connection, first_byte)
+            session = await self._socks5_handshake(connection, first_byte)
         else:
-            return await self._http_handshake(connection, first_byte)
+            session = await self._http_handshake(connection, first_byte)
+        await self.queue.put(session)
 
     async def close(self):
         return await self.listener.close()

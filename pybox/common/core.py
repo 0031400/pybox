@@ -16,9 +16,9 @@ class Core:
         self.outbounds = outbounds
         self.router = router
 
-    async def start(self):
+    def start(self):
         for inbound in self.inbounds:
-            await inbound.start()
+            asyncio.create_task(inbound.start())
 
     async def run(self):
         tasks = [
@@ -27,7 +27,8 @@ class Core:
         await asyncio.gather(*tasks)
 
     async def _consume(self, inbound: Inbound):
-        async for session in inbound.sessions():
+        while True:
+            session = await inbound.sessions()
             asyncio.create_task(self._handle_session(session))
 
     async def _handle_session(self, session: Session):

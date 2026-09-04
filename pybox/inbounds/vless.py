@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from ..common.address import AddressType, Destination
 from ..common.session import Session
@@ -13,6 +14,7 @@ class VLessInbound(Inbound):
     def __init__(self, listener: Listener, uuids: list[str]) -> None:
         self.listener = listener
         self.uuids: list[bytes] = []
+        self.queue: asyncio.Queue[Session] = asyncio.Queue()
         for uuid in uuids:
             uuid = uuid.replace("-", "")
             if len(uuid) != 32:
@@ -21,19 +23,16 @@ class VLessInbound(Inbound):
         if not len(self.uuids):
             raise RuntimeError("lack uuid")
 
-
     async def start(self):
         await self.listener.start()
-
-    async def sessions(self) -> AsyncIterator[Session]:
         while True:
             connection = await self.listener.accept()
-            try:
-                yield await self._handshake(connection)
-            except Exception:
-                await connection.close()
+            asyncio.create_task(self._handshake(connection))
 
-    async def _handshake(self, connection: Connection) -> Session:
+    async def sessions(self) -> Session:
+        return await self.queue.get()
+
+    async def _handshake(self, connection: Connection):
         version = (await connection.read_exactly(1))[0]
         if version != 0:
             raise RuntimeError("version error")
@@ -67,7 +66,8 @@ class VLessInbound(Inbound):
         initial_data = await connection.read(4096)
         await connection.write(bytes([0, 0]))
         destination = Destination(type=address_type, address=address, port=port)
-        return Session(connection, destination, initial_data)
+        session = Session(connection, destination, initial_data)
+        await self.queue.put(session)
 
     async def close(self):
         return await self.listener.close()
