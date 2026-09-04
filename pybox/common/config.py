@@ -3,13 +3,6 @@ import json
 
 
 @dataclass
-class InboundConfig:
-    type: str
-    listen: str | None
-    listen_port: int | None
-
-
-@dataclass
 class TransportConfig:
     type: str
     path: str | None
@@ -21,6 +14,18 @@ class TlsConfig:
     enabled: bool
     server_name: str | None
     insecure: bool
+    certificate_path: str | None
+    key_path: str | None
+
+
+@dataclass
+class InboundConfig:
+    type: str
+    listen: str | None
+    listen_port: int | None
+    uuid: list[str] | None
+    transport: TransportConfig | None
+    tls: TlsConfig | None
 
 
 @dataclass
@@ -111,7 +116,22 @@ def parse_config(data: dict) -> Config:
 
 
 def parse_inbound(data: dict) -> InboundConfig:
-    return InboundConfig(data["type"], data.get("listen"), data.get("listen_port"))
+    transport_data = data.get("transport")
+    transport: TransportConfig | None = None
+    if transport_data is not None:
+        transport = parse_transport(transport_data)
+    tls_data = data.get("tls")
+    tls: TlsConfig | None = None
+    if tls_data is not None:
+        tls = parse_tls(tls_data)
+    return InboundConfig(
+        data["type"],
+        data.get("listen"),
+        data.get("listen_port"),
+        data.get("uuid"),
+        transport,
+        tls,
+    )
 
 
 def parse_transport(data: dict) -> TransportConfig:
@@ -120,7 +140,11 @@ def parse_transport(data: dict) -> TransportConfig:
 
 def parse_tls(data: dict) -> TlsConfig:
     return TlsConfig(
-        data.get("enabled", False), data.get("server_name"), data.get("insecure", False)
+        data.get("enabled", False),
+        data.get("server_name"),
+        data.get("insecure", False),
+        data.get("certificate_path"),
+        data.get("key_path"),
     )
 
 

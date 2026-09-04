@@ -2,7 +2,12 @@ import json
 import re
 
 from ..inbounds.inbound import Inbound
+from ..inbounds.listeners.listener import Listener
+from ..inbounds.listeners.tls_listener import TlsListener
+from ..inbounds.listeners.ws_listener import WsListener
+from ..inbounds.listeners.wss_listener import WssListener
 from ..inbounds.mixed import MixedInbound
+from ..inbounds.vless import VLessInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
 from ..outbounds.transports.tls import TlsTransport
@@ -53,12 +58,44 @@ class App:
                 print("[system proxy] unset")
 
 
+def create_listener(config: InboundConfig) -> Listener:
+    if config.listen_port is None or config.listen is None:
+        raise RuntimeError("vless inbound error")
+    if not config.transport or config.transport.type == "tcp":
+        if not config.tls or not config.tls.enabled:
+            listener = TcpListener(config.listen, config.listen_port)
+        else:
+            if not config.tls.certificate_path or not config.tls.key_path:
+                raise RuntimeError("vless tls inbound error")
+            listener = TlsListener(
+                config.listen,
+                config.listen_port,
+                config.tls.certificate_path,
+                config.tls.key_path,
+            )
+    elif config.transport.type=="ws":
+        if not config.tls or not config.tls.enabled:
+            listener = WsListener(config.listen, config.listen_port)
+        else:
+            if not config.tls.certificate_path or not config.tls.key_path:
+                raise RuntimeError("vless tls inbound error")
+            listener = WssListener(
+                config.listen,
+                config.listen_port,
+                config.tls.certificate_path,
+                config.tls.key_path,
+            )
+
+    raise RuntimeError("listener unsupport")
+
+
 def create_inbound(config: InboundConfig) -> Inbound:
     if config.type == "mixed":
-        if config.listen_port is None or config.listen is None:
-            raise RuntimeError("socks5 inbound error")
-        listener = TcpListener(config.listen, config.listen_port)
-        return MixedInbound(listener)
+        return MixedInbound(create_listener(config))
+    elif config.type == "vless":
+        if not config.uuid:
+            raise RuntimeError("vless uuid error")
+        return VLessInbound(create_listener(config), config.uuid)
     raise RuntimeError("unsupport inbound type")
 
 

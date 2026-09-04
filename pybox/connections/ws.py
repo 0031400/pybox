@@ -4,7 +4,9 @@ from .connection import Connection
 
 
 class WsConnection(Connection):
-    def __init__(self, ws: websockets.ClientConnection) -> None:
+    def __init__(
+        self, ws: websockets.ClientConnection | websockets.ServerConnection
+    ) -> None:
         self.ws = ws
         self.buffer = bytearray()
 
