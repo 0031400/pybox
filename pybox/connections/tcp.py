@@ -11,7 +11,7 @@ class TcpConnection(Connection):
         self.reader = reader
         self.writer = writer
 
-    async def read(self, n: int = -1) -> bytes:
+    async def read(self, n: int) -> bytes:
         return await self.reader.read(n)
 
     async def read_exactly(self, n: int) -> bytes:

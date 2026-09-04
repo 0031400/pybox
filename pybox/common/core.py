@@ -1,4 +1,5 @@
 import asyncio
+import time
 from ..connections.connection import Connection
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
@@ -43,7 +44,10 @@ class Core:
             raise RuntimeError("outbound not exist")
         print(f"[route] {session.destination.authority()} -> {outbound_tag}")
         try:
+            start = time.perf_counter()
             remote = await outbound.connect(session.destination, session.initial_data)
+            end = time.perf_counter()
+            print(f"outbound.connect time: {end-start}s")
             await relay(session.connection, remote)
         except Exception:
             try:

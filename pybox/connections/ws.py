@@ -10,21 +10,16 @@ class WsConnection(Connection):
         self.ws = ws
         self.buffer = bytearray()
 
-    async def read(self, n: int = -1) -> bytes:
-        while True:
-            if self.buffer:
-                if n <= 0:
-                    data = bytes(self.buffer)
-                    self.buffer.clear()
-                    return data
-                data = bytes(self.buffer[:n])
-                del self.buffer[:n]
-                return data
-
+    async def read(self, n: int) -> bytes:
+        if self.buffer:
+            data = bytes(self.buffer[:n])
+            del self.buffer[:n]
+            return data
+        else:
             message = await self.ws.recv()
             if isinstance(message, str):
                 raise RuntimeError("ws receive text message")
-            self.buffer.extend(message)
+            return message
 
     async def read_exactly(self, n: int) -> bytes:
         while len(self.buffer) < n:
