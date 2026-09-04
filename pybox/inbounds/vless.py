@@ -12,7 +12,15 @@ from .inbound import Inbound
 class VLessInbound(Inbound):
     def __init__(self, listener: Listener, uuids: list[str]) -> None:
         self.listener = listener
-        self.uuids = uuids
+        self.uuids: list[bytes] = []
+        for uuid in uuids:
+            uuid = uuid.replace("-", "")
+            if len(uuid) != 32:
+                raise RuntimeError("error uuid length")
+            self.uuids.append(bytes.fromhex(uuid))
+        if not len(self.uuids):
+            raise RuntimeError("lack uuid")
+
 
     async def start(self):
         await self.listener.start()
