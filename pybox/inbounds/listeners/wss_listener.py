@@ -12,10 +12,11 @@ from .listener import Listener
 
 class WssListener(Listener):
     def __init__(
-        self, host: str, port: int, certificate_path: str, key_path: str
+        self, host: str, port: int, path: str, certificate_path: str, key_path: str
     ) -> None:
         self.host = host
         self.port = port
+        self.path = path
         self.certificate_path = certificate_path
         self.key_path = key_path
         self.server: websockets.Server | None = None
@@ -33,6 +34,8 @@ class WssListener(Listener):
             print(f"[listen] wss://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, ws: websockets.ServerConnection):
+        if not ws.request or ws.request.path != self.path:
+            await ws.close()
         connection = WsConnection(ws)
         await self.queue.put(connection)
         await ws.wait_closed()

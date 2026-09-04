@@ -76,13 +76,16 @@ def create_listener(config: InboundConfig) -> Listener:
             )
     elif config.transport.type == "ws":
         if not config.tls or not config.tls.enabled:
-            return WsListener(config.listen, config.listen_port)
+            return WsListener(
+                config.listen, config.listen_port, config.transport.path or "/"
+            )
         else:
             if not config.tls.certificate_path or not config.tls.key_path:
                 raise RuntimeError("vless tls inbound error")
             return WssListener(
                 config.listen,
                 config.listen_port,
+                config.transport.path or "/",
                 config.tls.certificate_path,
                 config.tls.key_path,
             )
