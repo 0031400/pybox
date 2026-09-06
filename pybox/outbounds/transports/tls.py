@@ -1,7 +1,7 @@
 import asyncio
 import ssl
 
-from ...common.network import  open_sock
+from ...common.network import  open_tcp_sock
 from ...connections.connection import Connection
 
 from ...common.address import Address
@@ -19,7 +19,7 @@ class TlsTransport(Transport):
         if self.insecure:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-        sock = await open_sock(destination)
+        sock = await open_tcp_sock(destination)
         reader, writer = await asyncio.open_connection(
             sock=sock, ssl=context, server_hostname=self.server_name
         )

@@ -33,7 +33,7 @@ def set_default_local_addr():
         print(f"[ipv6] {LOCAL_IPV6}")
 
 
-async def open_sock(destination: Address):
+async def open_tcp_sock(destination: Address) -> socket.socket:
     global LOCAL_IPV4, LOCAL_IPV6
     if isinstance(destination, DOMAIN_Address):
         ips = await resolve(destination.address)

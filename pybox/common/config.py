@@ -87,10 +87,41 @@ class RouteConfig:
 
 
 @dataclass
+class DnsRuleConfig:
+    rule: RuleConfig | None
+    rule_set: list[str]
+    server: str
+
+
+@dataclass
+class DnsServerConfig:
+    type: str
+    tag: str
+    server: str | None
+    server_port: int | None
+    tls: TlsConfig | None
+    path: str | None
+    headers: dict[str, str] | None
+    bootstrap_address: str | None
+
+
+@dataclass
+class DnsConfig:
+    enabled: bool
+    listen: str | None
+    listen_port: int | None
+    servers: list[DnsServerConfig]
+    rules: list[DnsRuleConfig]
+    default_nameserver: str | None
+    final: str | None
+
+
+@dataclass
 class Config:
     inbounds: list[InboundConfig]
     outbounds: list[OutboundConfig]
     route: RouteConfig
+    dns: DnsConfig | None
     system_proxy: SystemProxyConfig | None
 
 
@@ -109,10 +140,15 @@ def parse_config(data: dict) -> Config:
     system_proxy: SystemProxyConfig | None = None
     if system_proxy_data:
         system_proxy = parse_system_proxy(system_proxy_data)
+    dns_data = data.get("dns", None)
+    dns: DnsConfig | None = None
+    if dns_data:
+        dns = parse_dns(dns_data)
     return Config(
         [parse_inbound(item) for item in data["inbounds"]],
         [parse_outbound(item) for item in data["outbounds"]],
         parse_route(data["route"]),
+        dns,
         system_proxy,
     )
 
@@ -199,4 +235,41 @@ def parse_route(data: dict) -> RouteConfig:
         [parse_route_rule(item) for item in data.get("rules", [])],
         [parse_rule_set(item) for item in data.get("rule_set", [])],
         data["final"],
+    )
+
+
+def parse_dns_server(data: dict) -> DnsServerConfig:
+    tls_data = data.get("tls")
+    tls: TlsConfig | None = None
+    if tls_data is not None:
+        tls = parse_tls(tls_data)
+    return DnsServerConfig(
+        data["type"],
+        data["tag"],
+        data.get("server"),
+        data.get("server_port"),
+        tls,
+        data.get("path"),
+        data.get("headers"),
+        data.get("bootstrap-address"),
+    )
+
+
+def parse_dns_rule(data: dict) -> DnsRuleConfig:
+    return DnsRuleConfig(
+        parse_rule(data),
+        normalize_list(data.get("rule_set")),
+        data["server"],
+    )
+
+
+def parse_dns(data: dict) -> DnsConfig:
+    return DnsConfig(
+        data.get("enabled", False),
+        data.get("listen"),
+        data.get("listen_port"),
+        [parse_dns_server(item) for item in data.get("servers", [])],
+        [parse_dns_rule(item) for item in data.get("rules", [])],
+        data.get("default-nameserver"),
+        data.get("final"),
     )
