@@ -1,7 +1,6 @@
+import ipaddress
 import json
 import re
-import sys
-
 from ..inbounds.inbound import Inbound
 from ..inbounds.listeners.listener import Listener
 from ..inbounds.listeners.tls_listener import TlsListener
@@ -25,7 +24,7 @@ from .config import (
     parse_rule,
 )
 
-from .address import Destination
+from .address import Address, host_port_to_addr
 from .core import Core
 from ..inbounds.listeners.tcp_listener import TcpListener
 from ..outbounds.direct import DirectOutbound
@@ -103,7 +102,10 @@ def create_inbound(config: InboundConfig) -> Inbound:
     elif config.type == "tun":
         if not config.tun_ipv4 or not config.tun_next_ipv4:
             raise RuntimeError("tun error")
-        return TunInbound(config.tun_ipv4, config.tun_next_ipv4)
+        return TunInbound(
+            ipaddress.IPv4Address(config.tun_ipv4),
+            ipaddress.IPv4Address(config.tun_next_ipv4),
+        )
     raise RuntimeError("unsupport inbound type")
 
 
@@ -139,7 +141,7 @@ def create_outbound(config: OutboundConfig) -> Outbound:
         else:
             raise RuntimeError("unsupport transport type")
         return VlessOutbound(
-            Destination.from_host_port(config.server, config.server_port),
+            host_port_to_addr(config.server, config.server_port),
             config.uuid,
             transport,
         )

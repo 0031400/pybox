@@ -1,7 +1,15 @@
 import asyncio
 from collections.abc import AsyncIterator
 from urllib.parse import urlsplit
-from ..common.address import AddressType, Destination
+from ..common.address import (
+    AddressType,
+    Address,
+    DOMAIN_Address,
+    IPV4_Address,
+    IPV6_Address,
+    authority_to_addr,
+    host_port_to_addr,
+)
 from ..connections.connection import Connection
 from ..common.session import Session
 import ipaddress
@@ -52,21 +60,22 @@ class MixedInbound(Inbound):
         address_type = AddressType.IPV4
         if atyp == 1:
             addr_bytes = await connection.read_exactly(4)
-            address = str(ipaddress.IPv4Address(addr_bytes))
+            destination = IPV4_Address(ipaddress.IPv4Address(addr_bytes), 0)
         elif atyp == 3:
             address_type = AddressType.DOMAIN
             domain_len = (await connection.read_exactly(1))[0]
             address = (await connection.read_exactly(domain_len)).decode()
+            destination = DOMAIN_Address(address, 0)
         elif atyp == 4:
             address_type = AddressType.IPV6
             addr_bytes = await connection.read_exactly(16)
-            address = str(ipaddress.IPv6Address(addr_bytes))
+            destination = IPV6_Address(ipaddress.IPv6Address(addr_bytes), 0)
         else:
             raise RuntimeError("atyp error")
         port = int.from_bytes((await connection.read_exactly(2)), "big")
         await connection.write(bytes([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
         initial_data = await connection.read(4096)
-        destination = Destination(type=address_type, address=address, port=port)
+        destination.port = port
         return Session(connection, destination, initial_data)
 
     async def _http_handshake(
@@ -92,7 +101,7 @@ class MixedInbound(Inbound):
             raise RuntimeError("invalid http request line")
         method, target, version = parts
         if method.upper() == "CONNECT":
-            destination = Destination.from_authority(target)
+            destination = authority_to_addr(target)
             await connection.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             initial_data = await connection.read(4096)
             return Session(connection, destination, initial_data)
@@ -101,7 +110,7 @@ class MixedInbound(Inbound):
         uri = urlsplit(target)
         if not uri.hostname:
             raise RuntimeError("http proxy missing host")
-        destination = Destination.from_host_port(uri.hostname, uri.port or 80)
+        destination = host_port_to_addr(uri.hostname, uri.port or 80)
         path = uri.path or "/"
         if uri.query:
             path += "?" + uri.query

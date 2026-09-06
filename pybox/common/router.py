@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import ipaddress
 import re
 
-from .address import AddressType, Destination
+from .address import Address, DOMAIN_Address
 
 
 @dataclass
@@ -45,15 +45,11 @@ class Rule:
                 return True
         return False
 
-    def match(self, destination: Destination) -> bool:
-        if destination.type == AddressType.DOMAIN:
+    def match(self, destination: Address) -> bool:
+        if isinstance(destination, DOMAIN_Address):
             return self.match_domain(destination.address)
         else:
-            try:
-                ip = ipaddress.ip_address(destination.address)
-            except ValueError:
-                return False
-            return self.match_ip(ip)
+            return self.match_ip(destination.address)
 
 
 @dataclass
@@ -72,13 +68,13 @@ class Router:
         self.rule_sets = rule_sets
         self.final = final
 
-    def route(self, destination: Destination) -> str:
+    def route(self, destination: Address) -> str:
         for rule in self.rules:
             if self.match(rule, destination):
                 return rule.outbound
         return self.final
 
-    def match(self, route_rule: RouteRule, destination: Destination) -> bool:
+    def match(self, route_rule: RouteRule, destination: Address) -> bool:
         if route_rule.rule is not None:
             if route_rule.rule.match(destination):
                 return True

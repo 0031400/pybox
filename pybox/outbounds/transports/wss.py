@@ -2,9 +2,10 @@ import ssl
 
 import websockets
 
+from ...common.network import open_sock
 from ...connections.connection import Connection
 
-from ...common.address import AddressType, Destination
+from ...common.address import AddressType, Address, DOMAIN_Address, host_port_to_addr
 from ...connections.ws import WsConnection
 from .transport import Transport
 
@@ -18,33 +19,24 @@ class WssTransport(Transport):
         self.server_name = server_name
         self.insecure = insecure
 
-    async def connect(self, destination: Destination) -> Connection:
+    async def connect(self, destination: Address) -> Connection:
         context = ssl.create_default_context()
         if self.insecure:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
+        sock = await open_sock(destination)
         key = next((k for k in self.headers if k.lower() == "host"), None)
-        if destination.type != AddressType.DOMAIN and key:
-            ip = destination.address
-            destination.address = self.headers[key]
-            del self.headers[key]
-            uri = f"wss://{destination.authority()}{self.path}"
-            ws = await websockets.connect(
-                uri,
-                additional_headers=self.headers,
-                ssl=context,
-                host=ip,
-                port=destination.port,
-                server_hostname=self.server_name,
-                proxy=None,
-            )
+        if key:
+            host_dst = host_port_to_addr(self.headers[key], destination.port)
         else:
-            uri = f"wss://{destination.authority()}{self.path}"
-            ws = await websockets.connect(
-                uri,
-                additional_headers=self.headers,
-                ssl=context,
-                server_hostname=self.server_name,
-                proxy=None,
-            )
+            host_dst = destination
+        uri = f"wss://{host_dst.authority()}{self.path}"
+        ws = await websockets.connect(
+            uri,
+            additional_headers=self.headers,
+            ssl=context,
+            server_hostname=self.server_name,
+            proxy=None,
+            sock=sock,
+        )
         return WsConnection(ws)

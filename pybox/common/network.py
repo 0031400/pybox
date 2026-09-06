@@ -1,44 +1,37 @@
 import asyncio
-from math import e
+from ipaddress import IPv4Address, IPv6Address
+import ipaddress
+from typing import cast
 import socket
 import ssl
 
+from ..dns.dns import resolve
+from .address import AddressType, Address, DOMAIN_Address, IPV4_Address
 
-async def open_connection(
-    host: str,
-    port: int,
-    ssl: ssl.SSLContext | None = None,
-    server_hostname: str | None = None,
-) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    loop = asyncio.get_running_loop()
-    addresses = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
 
-    async def connect(
-        addr: tuple[
-            socket.AddressFamily,
-            socket.SocketKind,
-            int,
-            str,
-            tuple[str, int] | tuple[str, int, int, int] | tuple[int, bytes],
-        ],
-    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        family, socktype, proto, _, sock_addr = addr
-        if not isinstance(sock_addr[0], str) or not isinstance(sock_addr[1], int):
-            raise RuntimeError("unsupport address")
-        return await asyncio.open_connection(
-            sock_addr[0],
-            sock_addr[1],
-            ssl=ssl,
-            local_addr=("10.137.1.37", 0),
-            server_hostname=server_hostname,
-        )
+async def open_sock(destination: Address):
+    if isinstance(destination, DOMAIN_Address):
+        ips = await resolve(destination.address)
+    else:
+        ips = [destination.address]
 
-    tasks = [asyncio.create_task(connect(addr)) for addr in addresses]
+    async def connect(ip: IPv4Address | IPv6Address, port: int) -> socket.socket:
+        if isinstance(ip, ipaddress.IPv4Address):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        # sock.bind(("10.137.1.37", 0))
+        sock.setblocking(False)
+        loop = asyncio.get_running_loop()
+        await loop.sock_connect(sock, (str(ip), port))
+        return sock
+
+    tasks = [asyncio.create_task(connect(ip, destination.port)) for ip in ips]
     try:
         for future in asyncio.as_completed(tasks):
             try:
-                reader, writer = await future
-                return reader, writer
+                sock = await future
+                return sock
             except Exception:
                 continue
         raise RuntimeError("fail to connect")

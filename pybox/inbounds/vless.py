@@ -1,6 +1,9 @@
 import asyncio
-from collections.abc import AsyncIterator
-from ..common.address import AddressType, Destination
+from ..common.address import (
+    DOMAIN_Address,
+    IPV4_Address,
+    IPV6_Address,
+)
 from ..common.session import Session
 from ..connections.connection import Connection
 import ipaddress
@@ -48,24 +51,20 @@ class VLessInbound(Inbound):
             raise RuntimeError("cmd unsupported")
         port = int.from_bytes((await connection.read_exactly(2)), "big")
         atyp = (await connection.read_exactly(1))[0]
-        address = ""
         if atyp == 1:
-            address_type = AddressType.IPV4
             addr_bytes = await connection.read_exactly(4)
-            address = str(ipaddress.IPv4Address(addr_bytes))
+            destination = IPV4_Address(ipaddress.IPv4Address(addr_bytes), port)
         elif atyp == 2:
-            address_type = AddressType.DOMAIN
             domain_len = (await connection.read_exactly(1))[0]
             address = (await connection.read_exactly(domain_len)).decode()
+            destination = DOMAIN_Address(address, port)
         elif atyp == 3:
-            address_type = AddressType.IPV6
             addr_bytes = await connection.read_exactly(16)
-            address = str(ipaddress.IPv6Address(addr_bytes))
+            destination = IPV6_Address(ipaddress.IPv6Address(addr_bytes), port)
         else:
             raise RuntimeError("atyp unsupported")
         initial_data = await connection.read(4096)
         await connection.write(bytes([0, 0]))
-        destination = Destination(type=address_type, address=address, port=port)
         session = Session(connection, destination, initial_data)
         await self.queue.put(session)
 

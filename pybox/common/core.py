@@ -2,7 +2,7 @@ import asyncio
 from ..connections.connection import Connection
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
-from .address import AddressType
+from .address import AddressType, DOMAIN_Address
 from .router import Router
 from .session import Session
 from .sniff import sniff_tls_hostname
@@ -33,13 +33,12 @@ class Core:
 
     async def _handle_session(self, session: Session):
         hostname = sniff_tls_hostname(session.initial_data)
-        if hostname and session.destination.type != AddressType.DOMAIN:
+        if hostname and not isinstance(session.destination, DOMAIN_Address):
             print(f"[sniff] {session.destination.authority()} -> {hostname}")
-            session.destination.type = AddressType.DOMAIN
-            session.destination.address = hostname
+            session.destination = DOMAIN_Address(hostname, session.destination.port)
         outbound_tag = self.router.route(session.destination)
         outbound = self.outbounds.get(outbound_tag)
-        if outbound is None:
+        if not outbound:
             raise RuntimeError("outbound not exist")
         print(f"[route] {session.destination.authority()} -> {outbound_tag}")
         try:

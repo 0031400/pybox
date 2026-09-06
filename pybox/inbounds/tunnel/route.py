@@ -1,3 +1,4 @@
+import ipaddress
 import subprocess
 
 
@@ -6,7 +7,7 @@ def run_command(command: list[str]):
     return subprocess.run(command, capture_output=True).returncode == 0
 
 
-def add_ipv4_address(tun_name: str, ip: str):
+def add_ipv4_address(tun_name: str, ip: ipaddress.IPv4Address):
     return run_command(
         [
             "netsh",
@@ -16,13 +17,13 @@ def add_ipv4_address(tun_name: str, ip: str):
             "address",
             "name=" + tun_name,
             "static",
-            ip,
+            str(ip),
             "255.255.255.0",
         ]
     )
 
 
-def set_route(tun_name: str, ip: str):
+def set_route(tun_name: str, ip: ipaddress.IPv4Address):
     return run_command(
         [
             "netsh",
@@ -32,6 +33,6 @@ def set_route(tun_name: str, ip: str):
             "route",
             "220.181.111.232/32",
             tun_name,
-            ip,
+            str(ip),
         ]
     )

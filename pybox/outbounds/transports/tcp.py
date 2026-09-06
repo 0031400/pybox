@@ -1,14 +1,15 @@
-from ...common.network import open_connection
+import asyncio
+
+from ...common.network import  open_sock
 from ...connections.connection import Connection
 
-from ...common.address import Destination
+from ...common.address import Address
 from ...connections.tcp import TcpConnection
 from .transport import Transport
 
 
 class TcpTransport(Transport):
-    async def connect(self, destination: Destination) -> Connection:
-        reader, writer = await open_connection(
-            destination.address, destination.port
-        )
+    async def connect(self, destination: Address) -> Connection:
+        sock = await open_sock(destination)
+        reader, writer = await asyncio.open_connection(sock=sock)
         return TcpConnection(reader, writer)
