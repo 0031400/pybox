@@ -46,10 +46,12 @@ class TlsDnsServer(DnsServer):
         reader, writer = await asyncio.open_connection(
             sock=sock, ssl=context, server_hostname=self.server_hostname
         )
-        writer.write(request)
+        writer.write(len(request).to_bytes(2, "big") + request)
         await writer.drain()
         try:
-            return await reader.read(4096)
+            res = await reader.read(4096)
+            length = int.from_bytes(res[:2], "big")
+            return res[2 : 2 + length]
         finally:
             writer.close()
             await writer.wait_closed()
