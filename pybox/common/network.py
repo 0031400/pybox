@@ -46,14 +46,8 @@ async def open_sock(destination: Address):
         else:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 
-        # if LOCAL_IPV4:
-        #     sock.bind((LOCAL_IPV4, 0))
-        sock.setsockopt(
-            socket.IPPROTO_IP,
-            31,
-            struct.pack("!I", 19),
-        )
-        # if not LOCAL_IPV6:
+        if LOCAL_IPV4:
+            sock.bind((LOCAL_IPV4, 0))
         sock.setblocking(False)
         loop = asyncio.get_running_loop()
         await loop.sock_connect(sock, (str(ip), port))
