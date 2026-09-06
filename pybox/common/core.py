@@ -1,4 +1,5 @@
 import asyncio
+import threading
 
 import dns.message
 import dns.rdatatype
@@ -33,7 +34,7 @@ class Core:
         # dns
         if self.dns_center:
             await self.dns_center.start()
-            asyncio.create_task(self._dns_consume())
+            threading.Thread(target=self._dns_worker, daemon=True).start()
         for inbound in self.inbounds:
             asyncio.create_task(inbound.start())
 
@@ -48,19 +49,23 @@ class Core:
             session = await inbound.sessions()
             asyncio.create_task(self._handle_session(session))
 
-    async def _dns_consume(self):
+    def _dns_worker(self):self._dns_consume()
+    def _dns_consume(self):
         if not self.dns_center:
             return
         while True:
-            session = await self.dns_center.sessions()
-            asyncio.create_task(self._handle_dns_session(session))
+            # session =await asyncio.to_thread( self.dns_center.sessions)
+            session= self.dns_center.sessions()
+            threading.Thread(target=self._handle_dns_session,args=(session,),daemon=True).start()
+            # asyncio.create_task(self._handle_dns_session(session))
 
-    async def _handle_dns_session(self, session: DnsSession):
+    def _handle_dns_session(self, session: DnsSession):
         if not self.dns_router or not self.dns_center:
             return
         domain = str(from_wire(session.request).question[0].name)
         tag = self.dns_router.route(domain)
-        response_data = await self.dns_center.query(tag, session.request)
+        print(f"[dns] {domain} -> {tag}")
+        response_data = asyncio.run(self.dns_center.query(tag, session.request))
         response = dns.message.from_wire(response_data)
         ips: list[str] = []
         for rrset in response.answer:
@@ -72,7 +77,7 @@ class Core:
                     ips.append(str(rdata.address))
 
         print(f"[dns] {domain} -> {','.join(ips)}")
-        await self.dns_center.send(response_data, (str(session.ip), session.port))
+        self.dns_center.send(response_data, (str(session.ip), session.port))
 
     async def _handle_session(self, session: Session):
         hostname = sniff_tls_hostname(session.initial_data)

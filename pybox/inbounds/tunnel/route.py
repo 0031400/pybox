@@ -37,3 +37,18 @@ def set_route(tun_name: str, ip: ipaddress.IPv4Address):
             "metric=20",
         ]
     )
+
+
+def set_dns(tun_name: str):
+    return run_command(
+        [
+            "netsh",
+            "interface",
+            "ip",
+            "set",
+            "dns",
+            "name=" + tun_name,
+            "static",
+            "127.0.0.1",
+        ]
+    )

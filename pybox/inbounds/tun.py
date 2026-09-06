@@ -17,7 +17,7 @@ from .tunnel.ip import (
     is_ipv4_tcp,
 )
 from .tunnel.nat import Nat
-from .tunnel.route import add_ipv4_address, set_route
+from .tunnel.route import add_ipv4_address, set_dns, set_route
 from .tunnel.wintun import WinTun
 from ..common.session import Session
 
@@ -50,6 +50,8 @@ class TunInbound(Inbound):
         self.ipv4_listen_port, self.ipv6_listen_port = self.get_listen_port()
         if not set_route(self.tun_name, self.tun_next_ipv4):
             raise RuntimeError("fail set route")
+        if not set_dns(self.tun_name):
+            raise RuntimeError("fail set dns")
         while True:
             connection = await self.listener.accept()
             asyncio.create_task(self._handshake(connection))
