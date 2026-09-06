@@ -34,7 +34,7 @@ class Core:
         # dns
         if self.dns_center:
             await self.dns_center.start()
-            threading.Thread(target=self._dns_worker, daemon=True).start()
+            asyncio.create_task(self._dns_consume())
         for inbound in self.inbounds:
             asyncio.create_task(inbound.start())
 
@@ -49,23 +49,21 @@ class Core:
             session = await inbound.sessions()
             asyncio.create_task(self._handle_session(session))
 
-    def _dns_worker(self):self._dns_consume()
-    def _dns_consume(self):
+    async def _dns_consume(self):
         if not self.dns_center:
             return
         while True:
-            # session =await asyncio.to_thread( self.dns_center.sessions)
-            session= self.dns_center.sessions()
-            threading.Thread(target=self._handle_dns_session,args=(session,),daemon=True).start()
+            session = await self.dns_center.sessions()
+            asyncio.create_task(self._handle_dns_session(session))
             # asyncio.create_task(self._handle_dns_session(session))
 
-    def _handle_dns_session(self, session: DnsSession):
+    async def _handle_dns_session(self, session: DnsSession):
         if not self.dns_router or not self.dns_center:
             return
         domain = str(from_wire(session.request).question[0].name)
         tag = self.dns_router.route(domain)
         print(f"[dns] {domain} -> {tag}")
-        response_data = asyncio.run(self.dns_center.query(tag, session.request))
+        response_data = await self.dns_center.query(tag, session.request)
         response = dns.message.from_wire(response_data)
         ips: list[str] = []
         for rrset in response.answer:

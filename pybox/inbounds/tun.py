@@ -4,7 +4,7 @@ import threading
 from typing import cast
 
 from ..common.address import AddressType, IPV4_Address
-from ..common import network
+from ..common import globals
 from ..connections.tcp import TcpConnection
 from .inbound import Inbound
 from .listeners.tcp_listener import TcpListener
@@ -37,7 +37,7 @@ class TunInbound(Inbound):
         self.listener = TcpListener(str(self.tun_ipv4), 0)
 
     async def start(self):
-        if not network.LOCAL_IPV4:
+        if not globals.LOCAL_IPV4:
             raise RuntimeError("tun should get local ipv4")
         self.tun.start()
         self._packet_thread = threading.Thread(target=self.packet_loop, daemon=True)
@@ -50,8 +50,8 @@ class TunInbound(Inbound):
         self.ipv4_listen_port, self.ipv6_listen_port = self.get_listen_port()
         if not set_route(self.tun_name, self.tun_next_ipv4):
             raise RuntimeError("fail set route")
-        if not set_dns(self.tun_name):
-            raise RuntimeError("fail set dns")
+        # if not set_dns(self.tun_name):
+        #     raise RuntimeError("fail set dns")
         while True:
             connection = await self.listener.accept()
             asyncio.create_task(self._handshake(connection))

@@ -1,11 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 import ipaddress
-from queue import Queue
-import socket
-import threading
-from turtle import pu
 from typing import Any
+import dns.rdatatype
+
+import dns
+import dns.message
+import dns.query
+from ..common import globals
 
 from .servers.server import DnsServer
 
@@ -24,22 +26,15 @@ class DnsCenter:
         self.servers = servers
         self.listen = listen
         self.listen_port = listen_port
-        self.queue: Queue[DnsSession] = Queue()
-        self.transport: asyncio.DatagramTransport | None = None
+        self.queue: asyncio.Queue[DnsSession] = asyncio.Queue()
 
     async def start(self):
-        threading.Thread(target=self.serve_worker, daemon=True).start()
-
-    def serve_worker(self):
-        if self.listen and self.listen_port:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.bind((self.listen, self.listen_port))
-            while True:
-                try:
-                    data, addr = self.sock.recvfrom(65535)
-                    self.queue.put(DnsSession(data, ipaddress.ip_address(addr[0]), addr[1]))
-                except Exception as e:
-                    print(e)
+        if not self.listen or not self.listen_port:
+            raise RuntimeError("dns need listen addr")
+        loop = asyncio.get_running_loop()
+        self.transport, protocol = await loop.create_datagram_endpoint(
+            lambda: UdpClient(self), local_addr=(self.listen, self.listen_port)
+        )
 
     async def query(self, tag: str, request: bytes):
         server = self.servers.get(tag)
@@ -47,20 +42,41 @@ class DnsCenter:
             raise RuntimeError("fial to find dns server")
         return await server.query(request)
 
-    def sessions(self) -> DnsSession:
-        return self.queue.get()
+    async def sessions(self) -> DnsSession:
+        return await self.queue.get()
 
     def send(self, data: bytes, addr: tuple[str, int]):
-        self.sock.sendto(data, addr)
+        self.transport.sendto(data, addr)
+
+
+class UdpClient(asyncio.DatagramProtocol):
+    def __init__(self, center: DnsCenter) -> None:
+        self.center = center
+
+    def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
+        asyncio.create_task(
+            self.center.queue.put(
+                DnsSession(data, ipaddress.ip_address(addr[0]), addr[1])
+            )
+        )
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    loop = asyncio.get_running_loop()
-    results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
+    # loop = asyncio.get_running_loop()
+    # results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
+    # ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    # for family, _, _, _, sock_addr in results:
+    #     if family == socket.AF_INET:
+    #         ips.append(ipaddress.IPv4Address(sock_addr[0]))
+    #     if family == socket.AF_INET6:
+    #         ips.append(ipaddress.IPv6Address(sock_addr[0]))
+    # return ips
+    response = dns.query.udp(
+        dns.message.make_query(domain, "A"), "119.29.29.29", source=globals.LOCAL_IPV4
+    )
     ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    for family, _, _, _, sock_addr in results:
-        if family == socket.AF_INET:
-            ips.append(ipaddress.IPv4Address(sock_addr[0]))
-        if family == socket.AF_INET6:
-            ips.append(ipaddress.IPv6Address(sock_addr[0]))
+    for rrset in response.answer:
+        for rr in rrset:
+            if rrset.rdtype == dns.rdatatype.A or rrset.rdtype == dns.rdatatype.AAAA:
+                ips.append(ipaddress.ip_address(rr.address))
     return ips
