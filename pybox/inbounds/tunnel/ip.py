@@ -22,8 +22,8 @@ def is_udp(packet: bytes | bytearray) -> bool:
 
 
 def parse_tcp_ipv4(packet: bytes | bytearray) -> FlowKey | None:
-    src_ip = ipaddress.IPv4Address(packet[12:16])
-    dst_ip = ipaddress.IPv4Address(packet[16:20])
+    src_ip = ipaddress.IPv4Address(bytes(packet[12:16]))
+    dst_ip = ipaddress.IPv4Address(bytes(packet[16:20]))
     ihl = (packet[0] & 0x0F) * 4
     src_port, dst_port = struct.unpack_from(
         "!HH",

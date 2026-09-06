@@ -6,7 +6,7 @@ import socket
 import ssl
 
 from ..dns.dns import resolve
-from .address import AddressType, Address, DOMAIN_Address, IPV4_Address
+from .address import  Address, DOMAIN_Address
 
 
 async def open_sock(destination: Address):
@@ -20,7 +20,7 @@ async def open_sock(destination: Address):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         else:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        # sock.bind(("10.137.1.37", 0))
+        sock.bind(("10.137.1.37", 0))
         sock.setblocking(False)
         loop = asyncio.get_running_loop()
         await loop.sock_connect(sock, (str(ip), port))

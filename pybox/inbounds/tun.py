@@ -13,6 +13,8 @@ from .tunnel.ip import (
     replace_ipv4_flow,
     update_ipv4_checksum,
     update_ipv4_tcp_checksum,
+    is_ipv4,
+    is_ipv4_tcp,
 )
 from .tunnel.nat import Nat
 from .tunnel.route import add_ipv4_address, set_route
@@ -89,20 +91,23 @@ class TunInbound(Inbound):
 
     def packet_loop(self):
         while True:
-            packet = self.tun.get_packet()
-            b = bytearray(packet)
+            packet_bytes = self.tun.get_packet()
+            packet = bytearray(packet_bytes)
+            if is_ipv4(packet):
+                if is_ipv4_tcp(packet):
+                    self._deal_ipv4_tcp(packet)
 
-    def _deal_ipv4_tcp(self, byte_array: bytearray) -> bool:
+    def _deal_ipv4_tcp(self, byte_array: bytearray):
         flow_key = parse_tcp_ipv4(byte_array)
         if not flow_key:
-            return False
+            return
         if (
             self.tun_ipv4 == flow_key.src_ip
             and self.ipv4_listen_port == flow_key.src_port
         ):
             nat_session = self.ipv4_nat.lookup_back(flow_key.dst_port)
             if not nat_session:
-                return False
+                return
             replace_ipv4_flow(
                 byte_array,
                 nat_session.dst_ip,
@@ -115,14 +120,13 @@ class TunInbound(Inbound):
             replace_ipv4_flow(
                 byte_array,
                 self.tun_next_ipv4,
-                self.tun_next_ipv4,
+                self.tun_ipv4,
                 nat_port,
                 self.ipv4_listen_port,
             )
         update_ipv4_tcp_checksum(byte_array)
         update_ipv4_checksum(byte_array)
         self.tun.send(bytes(byte_array))
-        return True
 
     async def _handshake(self, connection: TcpConnection):
         peer = connection.writer.get_extra_info("peername")
