@@ -23,6 +23,16 @@
             "args": [
                 "-c","data\\config.json"
             ]
+        },
+        {
+            "name": "tun",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybox",
+            "console": "integratedTerminal",
+            "args": [
+                "-c","data\\tun.json"
+            ]
         }
     ]
 }

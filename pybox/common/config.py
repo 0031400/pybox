@@ -26,6 +26,8 @@ class InboundConfig:
     uuid: list[str] | None
     transport: TransportConfig | None
     tls: TlsConfig | None
+    tun_ipv4: str | None
+    tun_next_ipv4: str | None
 
 
 @dataclass
@@ -131,6 +133,8 @@ def parse_inbound(data: dict) -> InboundConfig:
         data.get("uuid"),
         transport,
         tls,
+        data.get("tun_ipv4"),
+        data.get("tun_next_ipv4"),
     )
 
 

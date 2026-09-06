@@ -8,6 +8,7 @@ from ..inbounds.listeners.tls_listener import TlsListener
 from ..inbounds.listeners.ws_listener import WsListener
 from ..inbounds.listeners.wss_listener import WssListener
 from ..inbounds.mixed import MixedInbound
+from ..inbounds.tun import TunInbound
 from ..inbounds.vless import VLessInbound
 from ..outbounds.block import BlockOutbound
 from ..outbounds.transports.tcp import TcpTransport
@@ -99,6 +100,10 @@ def create_inbound(config: InboundConfig) -> Inbound:
         if not config.uuid:
             raise RuntimeError("vless uuid error")
         return VLessInbound(create_listener(config), config.uuid)
+    elif config.type == "tun":
+        if not config.tun_ipv4 or not config.tun_next_ipv4:
+            raise RuntimeError("tun error")
+        return TunInbound(config.tun_ipv4, config.tun_next_ipv4)
     raise RuntimeError("unsupport inbound type")
 
 

@@ -29,6 +29,7 @@ async def open_connection(
             sock_addr[0],
             sock_addr[1],
             ssl=ssl,
+            local_addr=("10.137.1.37", 0),
             server_hostname=server_hostname,
         )
 

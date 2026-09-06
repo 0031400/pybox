@@ -8,7 +8,7 @@ from .listener import Listener
 
 
 class TcpListener(Listener):
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int | None) -> None:
         self.host = host
         self.port = port
         self.server: asyncio.Server | None = None
@@ -24,7 +24,7 @@ class TcpListener(Listener):
         await self.queue.put(connection)
         await writer.wait_closed()
 
-    async def accept(self) -> Connection:
+    async def accept(self) -> TcpConnection:
         return await self.queue.get()
 
     async def close(self):
