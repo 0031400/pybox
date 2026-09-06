@@ -32,6 +32,7 @@ from ..outbounds.outbound import Outbound
 from ..outbounds.transports.ws import WsTransport
 from ..outbounds.transports.wss import WssTransport
 from ..outbounds.vless import VlessOutbound
+from .network import set_default_local_addr
 from .router import RouteRule, Router, Rule
 
 
@@ -41,8 +42,17 @@ class App:
         self.system_proxy: SystemProxy | None = None
 
     async def run(self):
+        inbounds = [create_inbound(item) for item in self.config.inbounds]
+        tun_count = 0
+        for inbound in inbounds:
+            if isinstance(inbound, TunInbound):
+                tun_count += 1
+        if tun_count>1:
+            raise RuntimeError("only support one tun inbound")
+        elif tun_count==1:
+            set_default_local_addr()
         core = Core(
-            [create_inbound(item) for item in self.config.inbounds],
+            inbounds,
             {item.tag: create_outbound(item) for item in self.config.outbounds},
             create_router(self.config.route),
         )
@@ -101,7 +111,7 @@ def create_inbound(config: InboundConfig) -> Inbound:
         return VLessInbound(create_listener(config), config.uuid)
     elif config.type == "tun":
         if not config.tun_ipv4 or not config.tun_next_ipv4:
-            raise RuntimeError("tun error")
+            raise RuntimeError("tun need tun_ipv4 error")
         return TunInbound(
             ipaddress.IPv4Address(config.tun_ipv4),
             ipaddress.IPv4Address(config.tun_next_ipv4),

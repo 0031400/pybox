@@ -4,7 +4,7 @@ import threading
 from typing import cast
 
 from ..common.address import AddressType, IPV4_Address
-from ..connections.connection import Connection
+from ..common import network
 from ..connections.tcp import TcpConnection
 from .inbound import Inbound
 from .listeners.tcp_listener import TcpListener
@@ -37,6 +37,8 @@ class TunInbound(Inbound):
         self.listener = TcpListener(str(self.tun_ipv4), 0)
 
     async def start(self):
+        if not network.LOCAL_IPV4:
+            raise RuntimeError("tun should get local ipv4")
         self.tun.start()
         self._packet_thread = threading.Thread(target=self.packet_loop, daemon=True)
         self._packet_thread.start()
@@ -134,9 +136,12 @@ class TunInbound(Inbound):
         nat_session = self.ipv4_nat.lookup_back(nat_port)
         if not nat_session:
             raise RuntimeError("fail to find nat session")
+        print(f"[tun1] {str(nat_session.dst_ip)}:{ nat_session.dst_port}")
+        initial_data = await connection.read(4096)
+        print(f"[tun2] {str(nat_session.dst_ip)}:{ nat_session.dst_port}")
         session = Session(
             connection,
             IPV4_Address(nat_session.dst_ip, nat_session.dst_port),
-            bytes(),
+            initial_data,
         )
         await self.queue.put(session)

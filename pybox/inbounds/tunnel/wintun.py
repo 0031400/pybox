@@ -196,9 +196,12 @@ class WinTun:
             result = ctypes.windll.kernel32.WaitForSingleObject(self.event, 1000)
             if result == 0x102:
                 continue
-            data = self.receive()
-            if data:
-                self.queue.put(data)
+            while True:
+                data = self.receive()
+                if data:
+                    self.queue.put(data)
+                else:
+                    break
 
     def get_packet(self):
         return self.queue.get()

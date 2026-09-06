@@ -31,8 +31,9 @@ def set_route(tun_name: str, ip: ipaddress.IPv4Address):
             "ipv4",
             "add",
             "route",
-            "220.181.111.232/32",
+            "0.0.0.0/0",
             tun_name,
             str(ip),
+            "metric=20",
         ]
     )
