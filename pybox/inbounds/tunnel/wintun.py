@@ -13,6 +13,7 @@ WINTUN_SESSION_HANDLE = HANDLE
 ERROR_NO_MORE_ITEMS: Final = 259
 ERROR_HANDLE_EOF: Final = 38
 ERROR_OPERATION_ABORTED: Final = 995
+NET_LUID = ctypes.c_uint64
 
 
 class WinTun:
@@ -66,6 +67,12 @@ class WinTun:
         self._dll.WintunOpenAdapter.restype = WINTUN_ADAPTER_HANDLE
         self._dll.WintunStartSession.argtypes = [WINTUN_ADAPTER_HANDLE, DWORD]
         self._dll.WintunStartSession.restype = WINTUN_SESSION_HANDLE
+
+        self._dll.WintunGetAdapterLUID.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(NET_LUID),
+        ]
+        self._dll.WintunGetAdapterLUID.restype = None
         self._dll.WintunEndSession.argtypes = [WINTUN_SESSION_HANDLE]
         self._dll.WintunEndSession.restype = None
         self._dll.WintunGetReadWaitEvent.argtypes = [WINTUN_SESSION_HANDLE]
@@ -99,6 +106,11 @@ class WinTun:
     def _raise_last_error(cls, message: str):
         error = cls._last_error()
         raise RuntimeError(error, message)
+
+    def get_luid(self):
+        luid = NET_LUID(0)
+        self._dll.WintunGetAdapterLUID(self._adapter, luid)
+        return luid.value
 
     def create_adapter(self):
         if self._adapter:
