@@ -29,7 +29,7 @@ def set_default_local_addr():
 
 async def open_tcp_sock(destination: Address) -> socket.socket:
     if isinstance(destination, DOMAIN_Address):
-        ips = await resolve(destination.address)
+        ips: list[IPv4Address | IPv6Address] = await resolve(destination.address)
     else:
         ips = [destination.address]
 

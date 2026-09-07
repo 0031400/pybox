@@ -17,11 +17,16 @@ def is_ipv4_tcp(packet: bytes | bytearray) -> bool:
     return len(packet) >= ihl + 20 and 6 == packet[9]
 
 
+def is_ipv4_udp(packet: bytes | bytearray) -> bool:
+    ihl = (packet[0] & 0x0F) * 4
+    return len(packet) >= ihl + 8 and 17== packet[9]
+
+
 def is_udp(packet: bytes | bytearray) -> bool:
     return 17 == packet[9]
 
 
-def parse_tcp_ipv4(packet: bytes | bytearray) -> FlowKey | None:
+def parse_ipv4_flow(packet: bytes | bytearray) -> FlowKey | None:
     src_ip = ipaddress.IPv4Address(bytes(packet[12:16]))
     dst_ip = ipaddress.IPv4Address(bytes(packet[16:20]))
     ihl = (packet[0] & 0x0F) * 4

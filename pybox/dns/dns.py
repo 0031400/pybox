@@ -62,6 +62,7 @@ class UdpClient(asyncio.DatagramProtocol):
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    print(f'[resolve] {domain}')
     # loop = asyncio.get_running_loop()
     # results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
     # ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
