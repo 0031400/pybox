@@ -56,13 +56,15 @@ class DnsCenter:
 class UdpClient(asyncio.DatagramProtocol):
     def __init__(self, center: DnsCenter) -> None:
         self.center = center
+        self.tasks: list[asyncio.Task] = []
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        asyncio.create_task(
+        task=asyncio.create_task(
             self.center.queue.put(
                 DnsSession(data, ipaddress.ip_address(addr[0]), addr[1])
             )
         )
+        self.tasks.append(task)
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:

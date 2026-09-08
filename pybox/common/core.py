@@ -30,33 +30,39 @@ class Core:
         self.router = router
         self.dns_center = center
         self.dns_router = dns_router
+        self.tasks: list[asyncio.Task] = []
 
     async def start(self):
         # dns
         if self.dns_center:
             await self.dns_center.start()
-            asyncio.create_task(self._dns_consume())
+            task = asyncio.create_task(self._dns_consume())
+            self.tasks.append(task)
         for inbound in self.inbounds:
-            asyncio.create_task(inbound.start())
+            task = asyncio.create_task(inbound.start())
+            self.tasks.append(task)
 
     async def run(self):
-        tasks = [
-            asyncio.create_task(self._consume(inbound)) for inbound in self.inbounds
-        ]
-        await asyncio.gather(*tasks)
+        tasks: list[asyncio.Task] = []
+        for inbound in self.inbounds:
+            task = asyncio.create_task(self._consume(inbound))
+            tasks.append(task)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _consume(self, inbound: Inbound):
+        tasks: list[asyncio.Task] = []
         while True:
             session = await inbound.sessions()
-            asyncio.create_task(self._handle_session(session))
+            task = asyncio.create_task(self._handle_session(session))
+            tasks.append(task)
 
     async def _dns_consume(self):
         if not self.dns_center:
             return
+        tasks: list[asyncio.Task] = []
         while True:
             session = await self.dns_center.sessions()
-            asyncio.create_task(self._handle_dns_session(session))
-            # asyncio.create_task(self._handle_dns_session(session))
+            task = asyncio.create_task(self._handle_dns_session(session))
 
     async def _handle_dns_session(self, session: DnsSession):
         if not self.dns_router or not self.dns_center:

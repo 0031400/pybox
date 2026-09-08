@@ -17,6 +17,7 @@ class VLessInbound(Inbound):
     def __init__(self, listener: Listener, uuids: list[str]) -> None:
         self.listener = listener
         self.uuids: list[bytes] = []
+        self.tasks: list[asyncio.Task] = []
         self.queue: asyncio.Queue[Session] = asyncio.Queue()
         for uuid in uuids:
             uuid = uuid.replace("-", "")
@@ -30,7 +31,8 @@ class VLessInbound(Inbound):
         await self.listener.start()
         while True:
             connection = await self.listener.accept()
-            asyncio.create_task(self._handshake(connection))
+            task=asyncio.create_task(self._handshake(connection))
+            self.tasks.append(task)
 
     async def sessions(self) -> Session:
         return await self.queue.get()

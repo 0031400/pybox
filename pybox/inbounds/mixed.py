@@ -22,12 +22,14 @@ class MixedInbound(Inbound):
     def __init__(self, listener: Listener) -> None:
         self.listener = listener
         self.queue: asyncio.Queue[Session] = asyncio.Queue()
+        self.tasks: list[asyncio.Task] = []
 
     async def start(self):
         await self.listener.start()
         while True:
             connection = await self.listener.accept()
-            asyncio.create_task(self._handshake(connection))
+            task = asyncio.create_task(self._handshake(connection))
+            self.tasks.append(task)
 
     async def sessions(self) -> Session:
         return await self.queue.get()

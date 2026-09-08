@@ -48,6 +48,7 @@ class TunInbound(Inbound):
         self._tun_thread: threading.Thread | None = None
         self.listener = TcpListener(str(self.tun_ipv4), 0)
         self.ipv4_udp_listen_port = 0
+        self.tasks: list[asyncio.Task] = []
 
     async def start(self):
         if not globals.LOCAL_IPV4:
@@ -76,7 +77,8 @@ class TunInbound(Inbound):
         #     raise RuntimeError("fail set dns")
         while True:
             connection = await self.listener.accept()
-            asyncio.create_task(self._handshake(connection))
+            task=asyncio.create_task(self._handshake(connection))
+            self.tasks.append(task)
 
     async def start_tcp_listener(self):
         i = 0
@@ -236,11 +238,12 @@ class UdpListener(asyncio.DatagramProtocol):
         # self.clients: dict[int, asyncio.DatagramTransport] = {}
         # self.port_map: dict[int, int] = {}
         self.tun = tun
-
+        self.tasks: list[asyncio.Task] = []
     # def connection_made(self, transport: asyncio.DatagramTransport) -> None:
     #     self.transport=transport
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        asyncio.create_task(self.tun._handle_udp_listener(data, addr))
+        task=asyncio.create_task(self.tun._handle_udp_listener(data, addr))
+        self.tasks.append(task)
 
     # def handle_client(self,data:bytes, addr:tuple[str,int]):
     #     self.transport.sendto(data,)
@@ -249,9 +252,10 @@ class UdpListener(asyncio.DatagramProtocol):
 class UdpClient(asyncio.DatagramProtocol):
     def __init__(self, tun: TunInbound) -> None:
         self.tun = tun
-
+        self.tasks: list[asyncio.Task] = []
     # def connection_made(self, transport: asyncio.DatagramTransport) -> None:
     #     self.transport=transport
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        asyncio.create_task(self.tun._handle_udp_client(data, addr))
+        task=asyncio.create_task(self.tun._handle_udp_client(data, addr))
+        self.tasks.append(task)
         # self.listener.handle_client(data, addr)
