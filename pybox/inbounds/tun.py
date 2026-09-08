@@ -22,7 +22,7 @@ from .tunnel.ip import (
     update_ipv4_udp_checksum,
 )
 from .tunnel.nat import Nat
-from .tunnel.route import create_ipv4_address, set_route
+from .tunnel.route import create_ipv4_address, set_dns, set_route
 from .tunnel.wintun import WinTun
 from ..common.session import Session
 
@@ -60,9 +60,6 @@ class TunInbound(Inbound):
         self._tun_thread.start()
         luid = self.tun.get_luid()
         create_ipv4_address(luid, self.tun_ipv4, 32)
-        # if not add_ipv4_address(self.tun_name, self.tun_ipv4):
-        #     raise RuntimeError("fail set tun ipv4")
-        # tcp listener
         await self.start_tcp_listener()
         self.ipv4_tcp_listen_port, self.ipv6_listen_port = self.get_tcp_listen_port()
         # udp listener
@@ -73,8 +70,7 @@ class TunInbound(Inbound):
         self.ipv4_udp_listen_port = self.get_udp_listen_port()
         if not set_route(self.tun_name, self.tun_next_ipv4):
             raise RuntimeError("fail set route")
-        # if not set_dns(self.tun_name):
-        #     raise RuntimeError("fail set dns")
+        set_dns(self.tun_name)
         while True:
             connection = await self.listener.accept()
             task=asyncio.create_task(self._handshake(connection))

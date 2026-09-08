@@ -137,7 +137,7 @@ def set_route(tun_name: str, ip: ipaddress.IPv4Address):
 
 
 def set_dns(tun_name: str):
-    return run_command(
+    subprocess.Popen(
         [
             "netsh",
             "interface",
