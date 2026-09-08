@@ -12,6 +12,7 @@ import dns.message
 import dns.query
 from ..common import globals
 
+from ..common.log import log
 from .servers.server import DnsServer
 
 
@@ -65,7 +66,7 @@ class UdpClient(asyncio.DatagramProtocol):
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    print(f"[resolve] {domain}")
+    log("resolve", f"<- {domain}")
     if not globals.LOCAL_IPV4:
         loop = asyncio.get_running_loop()
         results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
@@ -103,5 +104,5 @@ async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Add
         for rr in rrset:
             if rrset.rdtype == dns.rdatatype.A or rrset.rdtype == dns.rdatatype.AAAA:
                 ips.append(ipaddress.ip_address(rr.address))
-    print(f"[resolve] {domain} -> {','.join([str(ip) for ip in ips])}")
+    log("resolve", f"{domain} -> {','.join([str(ip) for ip in ips])}")
     return ips

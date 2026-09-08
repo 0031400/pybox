@@ -2,6 +2,7 @@ import asyncio
 
 import websockets
 
+from ...common.log import log
 from ...connections.connection import Connection
 
 from ...connections.ws import WsConnection
@@ -20,7 +21,7 @@ class WsListener(Listener):
     async def start(self):
         self.server = await websockets.serve(self._handle, self.host, self.port)
         for sock in self.server.sockets:
-            print(f"[listen] ws://{format_socket_address(sock.getsockname())}")
+            log("listen",f"ws://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, ws: websockets.ServerConnection):
         if not ws.request or ws.request.path != self.path:

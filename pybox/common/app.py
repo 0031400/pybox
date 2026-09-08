@@ -1,6 +1,8 @@
 import ipaddress
 import json
 import re
+
+from pybox.common.log import log
 from ..dns.dns import DnsCenter
 from ..dns.router import DnsRouteRule, DnsRouter
 from ..dns.servers.server import DnsServer
@@ -94,13 +96,13 @@ class App:
         if self.config.system_proxy and self.config.system_proxy.enabled:
             self.system_proxy = SystemProxy(self.config.system_proxy.server)
             self.system_proxy.enable()
-            print(f"[system proxy] set: {self.system_proxy.server}")
+            log("system proxy", f"set: {self.system_proxy.server}")
         try:
             await core.run()
         finally:
             if self.system_proxy:
                 self.system_proxy.disable()
-                print("[system proxy] unset")
+                log("system proxy", f"unset")
 
 
 def create_listener(config: InboundConfig) -> Listener:

@@ -1,5 +1,6 @@
 import asyncio
 
+from ...common.log import log
 from ...connections.connection import Connection
 
 from ...connections.tcp import TcpConnection
@@ -17,7 +18,7 @@ class TcpListener(Listener):
     async def start(self):
         self.server = await asyncio.start_server(self._handle, self.host, self.port)
         for sock in self.server.sockets:
-            print(f"[listen] tcp://{format_socket_address(sock.getsockname())}")
+            log("listen",f"tcp://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         connection = TcpConnection(reader, writer)

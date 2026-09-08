@@ -7,6 +7,8 @@ from ..dns.dns import resolve
 from .address import Address, DOMAIN_Address
 
 from . import globals
+from .log import log
+
 
 def set_default_local_addr():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -22,9 +24,9 @@ def set_default_local_addr():
     finally:
         sock.close()
     if not globals.LOCAL_IPV4:
-        print(f"[ipv4] {globals.LOCAL_IPV4}")
+        log("[ipv4]", globals.LOCAL_IPV4)
     if not globals.LOCAL_IPV6:
-        print(f"[ipv6] {globals.LOCAL_IPV6}")
+        log("[ipv6]", globals.LOCAL_IPV6)
 
 
 async def open_tcp_sock(destination: Address) -> socket.socket:

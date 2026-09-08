@@ -133,7 +133,6 @@ class TunInbound(Inbound):
         flow_key = parse_ipv4_flow(packet)
         if not flow_key or not self.ipv4_udp_listen_port:
             return
-        print(f"[udp] {flow_key}")
         if (
             self.tun_ipv4 == flow_key.src_ip
             and self.ipv4_udp_listen_port == flow_key.src_port

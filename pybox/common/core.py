@@ -9,6 +9,7 @@ from ..dns.router import DnsRouteRule, DnsRouter
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
 from .address import AddressType, DOMAIN_Address
+from .log import log
 from .router import Router
 from .session import Session
 from .sniff import sniff_tls_hostname
@@ -62,7 +63,7 @@ class Core:
             return
         domain = str(from_wire(session.request).question[0].name)
         tag = self.dns_router.route(domain)
-        print(f"[dns] {domain} -> {tag}")
+        log("dns", f"{tag} <- {domain}")
         response_data = await self.dns_center.query(tag, session.request)
         response = dns.message.from_wire(response_data)
         ips: list[str] = []
@@ -73,20 +74,19 @@ class Core:
             if rrset.rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA]:
                 for rdata in rrset:
                     ips.append(str(rdata.address))
-
-        print(f"[dns] {domain} -> {','.join(ips)}")
+        log("dns", f"{domain} -> {tag} -> {','.join(ips)}")
         self.dns_center.send(response_data, (str(session.ip), session.port))
 
     async def _handle_session(self, session: Session):
         hostname = sniff_tls_hostname(session.initial_data)
         if hostname and not isinstance(session.destination, DOMAIN_Address):
-            print(f"[sniff] {session.destination.authority()} -> {hostname}")
+            log("sniff", f"{session.destination.authority()} -> {hostname}")
             session.destination = DOMAIN_Address(hostname, session.destination.port)
         outbound_tag = self.router.route(session.destination)
         outbound = self.outbounds.get(outbound_tag)
         if not outbound:
             raise RuntimeError("outbound not exist")
-        print(f"[route] {session.destination.authority()} -> {outbound_tag}")
+        log("route", f"{session.destination.authority()} -> {outbound_tag}")
         try:
             remote = await outbound.connect(session.destination, session.initial_data)
             await relay(session.connection, remote)

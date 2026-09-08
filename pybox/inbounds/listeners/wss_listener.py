@@ -3,6 +3,7 @@ import ssl
 
 import websockets
 
+from ...common.log import log
 from ...connections.connection import Connection
 
 from ...connections.ws import WsConnection
@@ -31,7 +32,7 @@ class WssListener(Listener):
             self._handle, self.host, self.port, ssl=ssl_context
         )
         for sock in self.server.sockets:
-            print(f"[listen] wss://{format_socket_address(sock.getsockname())}")
+            log("listen",f"wss://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, ws: websockets.ServerConnection):
         if not ws.request or ws.request.path != self.path:

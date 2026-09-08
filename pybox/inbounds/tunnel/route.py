@@ -4,6 +4,8 @@ import subprocess
 import ctypes
 import ipaddress
 
+from ...common.log import log
+
 
 class IN_ADDR(ctypes.Union):
     _fields_ = [
@@ -109,8 +111,13 @@ def create_ipv4_address(luid: int, ip: ipaddress.IPv4Address, prefix_length: int
 
 
 def run_command(command: list[str]):
-    print(" ".join(command))
-    return subprocess.run(command, capture_output=True).returncode == 0
+    log("cmd", f"<- {' '.join(command)}")
+    task = subprocess.run(command, capture_output=True, text=True)
+    if task.stdout:
+        log("cmd out", f"-> {task.stdout}")
+    if task.stderr:
+        log("cmd err", f"-> {task.stderr}")
+    return task.returncode == 0
 
 
 def set_route(tun_name: str, ip: ipaddress.IPv4Address):
