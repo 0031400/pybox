@@ -22,7 +22,7 @@ from .tunnel.ip import (
     update_ipv4_udp_checksum,
 )
 from .tunnel.nat import Nat
-from .tunnel.route import add_ipv4_address, create_ipv4_address, set_dns, set_route
+from .tunnel.route import create_ipv4_address, set_route
 from .tunnel.wintun import WinTun
 from ..common.session import Session
 
@@ -57,8 +57,8 @@ class TunInbound(Inbound):
         self._packet_thread.start()
         self._tun_thread = threading.Thread(target=self.tun.receive_worker, daemon=True)
         self._tun_thread.start()
-        luid=self.tun.get_luid()
-        create_ipv4_address(luid,self.tun_ipv4,32)
+        luid = self.tun.get_luid()
+        create_ipv4_address(luid, self.tun_ipv4, 32)
         # if not add_ipv4_address(self.tun_name, self.tun_ipv4):
         #     raise RuntimeError("fail set tun ipv4")
         # tcp listener

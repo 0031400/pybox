@@ -2,28 +2,23 @@ import ipaddress
 import subprocess
 
 import ctypes
-from ctypes import WinDLL, wintypes
 import ipaddress
-
-NET_LUID = ctypes.c_uint64
-NET_IFINDEX = wintypes.ULONG
-NL_PREFIX_ORIGIN = ctypes.c_int
-NL_SUFFIX_ORIGIN = ctypes.c_int
-NL_DAD_STATE = ctypes.c_int
 
 
 class IN_ADDR(ctypes.Union):
     _fields_ = [
-        ("S_addr", wintypes.ULONG),
+        ("S_addr", ctypes.c_ulong),
+        ("S_un_b", ctypes.c_ubyte * 4),
+        ("S_un_w", ctypes.c_ushort * 2),
     ]
 
 
 class SOCKADDR_IN(ctypes.Structure):
     _fields_ = [
-        ("sin_family", wintypes.USHORT),
-        ("sin_port", wintypes.USHORT),
+        ("sin_family", ctypes.c_ushort),
+        ("sin_port", ctypes.c_ushort),
         ("sin_addr", IN_ADDR),
-        ("sin_zero", ctypes.c_char * 8),
+        ("sin_zero", ctypes.c_ubyte * 8),
     ]
 
 
@@ -36,11 +31,18 @@ class IN6_ADDR(ctypes.Union):
 
 class SOCKADDR_IN6(ctypes.Structure):
     _fields_ = [
-        ("sin6_family", wintypes.USHORT),
-        ("sin6_port", wintypes.USHORT),
-        ("sin6_flowinfo", wintypes.ULONG),
+        ("sin6_family", ctypes.c_ushort),
+        ("sin6_port", ctypes.c_ushort),
+        ("sin6_flowinfo", ctypes.c_ulong),
         ("sin6_addr", IN6_ADDR),
-        ("sin6_scope_id", wintypes.ULONG),
+        ("sin6_scope_id", ctypes.c_ulong),
+    ]
+
+
+class SOCKET_ADDRESS(ctypes.Structure):
+    _fields_ = [
+        ("lpSockaddr", ctypes.c_void_p),
+        ("iSockaddrLength", ctypes.c_int),
     ]
 
 
@@ -48,101 +50,67 @@ class SOCKADDR_INET(ctypes.Union):
     _fields_ = [
         ("Ipv4", SOCKADDR_IN),
         ("Ipv6", SOCKADDR_IN6),
+        ("si_family", ctypes.c_ushort),
     ]
-
-
-class SCOPE_ID(ctypes.Union):
-    _fields_ = [
-        ("Value", wintypes.ULONG),
-    ]
-
-
-LARGE_INTEGER = ctypes.c_int64
 
 
 class MIB_UNICASTIPADDRESS_ROW(ctypes.Structure):
     _fields_ = [
         ("Address", SOCKADDR_INET),
-        ("InterfaceLuid", NET_LUID),
-        ("InterfaceIndex", NET_IFINDEX),
-        ("PrefixOrigin", NL_PREFIX_ORIGIN),
-        ("SuffixOrigin", NL_SUFFIX_ORIGIN),
-        ("ValidLifetime", wintypes.ULONG),
-        ("PreferredLifetime", wintypes.ULONG),
+        ("InterfaceLuid", ctypes.c_ulonglong),
+        ("InterfaceIndex", ctypes.c_ulong),
+        ("PrefixOrigin", ctypes.c_int),
+        ("SuffixOrigin", ctypes.c_int),
+        ("ValidLifetime", ctypes.c_ulong),
+        ("PreferredLifetime", ctypes.c_ulong),
         ("OnLinkPrefixLength", ctypes.c_ubyte),
-        ("SkipAsSource", wintypes.BOOLEAN),
-        ("DadState", NL_DAD_STATE),
-        ("ScopeId", SCOPE_ID),
-        ("CreationTimeStamp", LARGE_INTEGER),
+        ("SkipAsSource", ctypes.c_ubyte),
+        ("DadState", ctypes.c_int),
+        ("ScopeId", ctypes.c_ulong),
+        ("CreationTimeStamp", ctypes.c_ulonglong),
     ]
 
 
-AF_INET = 2
-IpPrefixOriginOther = 0
-IpPrefixOriginManual = 1
+def create_ipv4_address(luid: int, ip: ipaddress.IPv4Address, prefix_length: int = 24):
+    _iphlpapi = ctypes.WinDLL("iphlpapi.dll")
 
-IpSuffixOriginOther = 0
-IpSuffixOriginManual = 1
-
-IpDadStateInvalid = 0
-IpDadStateTentative = 1
-IpDadStateDuplicate = 2
-IpDadStateDeprecated = 3
-IpDadStatePreferred = 4
-
-INFINITE = 0xFFFFFFFF
-
-
-def create_ipv4_address(
-    luid: int,
-    address:  ipaddress.IPv4Address,
-    prefix_length: int,
-):
+    _iphlpapi.CreateUnicastIpAddressEntry.argtypes = [
+        ctypes.POINTER(MIB_UNICASTIPADDRESS_ROW),
+    ]
+    _iphlpapi.CreateUnicastIpAddressEntry.restype = ctypes.c_ulong
+    _iphlpapi.InitializeUnicastIpAddressEntry.argtypes = [
+        ctypes.POINTER(MIB_UNICASTIPADDRESS_ROW),
+    ]
+    _iphlpapi.InitializeUnicastIpAddressEntry.restype = None
     row = MIB_UNICASTIPADDRESS_ROW()
-    row.InterfaceLuid = luid
-    row.InterfaceIndex = 0
-    row.Address.Ipv4.sin_family = AF_INET
+    # _iphlpapi.InitializeUnicastIpAddressEntry(ctypes.byref(row))
+    row.Address.Ipv4.sin_family = 2
     row.Address.Ipv4.sin_port = 0
-    row.Address.Ipv4.sin_addr.S_addr = int.from_bytes(
-        address.packed,
-        "little",
-    )
-    row.Address.Ipv4.sin_zero = b"\x00" * 8
-    row.PrefixOrigin = IpPrefixOriginManual
-    row.SuffixOrigin = IpSuffixOriginManual
-    row.ValidLifetime = INFINITE
-    row.PreferredLifetime = INFINITE
+    row.Address.Ipv4.sin_addr.S_un_b[:] = ip.packed
+    row.Address.Ipv4.sin_zero[:] = b"\x00" * 8
+    row.InterfaceLuid = ctypes.c_ulonglong(luid)
+    row.InterfaceIndex = 0
+    row.PrefixOrigin = 1
+    row.SuffixOrigin = 1
+    row.ValidLifetime = 0xFFFFFFFF
+    row.PreferredLifetime = 0xFFFFFFFF
     row.OnLinkPrefixLength = prefix_length
     row.SkipAsSource = False
-    row.DadState = IpDadStatePreferred
-    row.ScopeId.Value = 0
+    row.DadState = 4
+    row.ScopeId = 0
     row.CreationTimeStamp = 0
-    iphlpapi = WinDLL("iphlpapi.dll")
-    ret = iphlpapi.CreateUnicastIpAddressEntry(ctypes.byref(row))
-    if ret != 0:
-        raise ctypes.WinError(ret)
+    error = _iphlpapi.CreateUnicastIpAddressEntry(ctypes.byref(row))
+
+    if error:
+        raise RuntimeError(
+            error,
+            f"fail to set ip",
+        )
 
 
 def run_command(command: list[str]):
     print(" ".join(command))
     return subprocess.run(command, capture_output=True).returncode == 0
-
-
-    
-def add_ipv4_address(tun_name: str, ip: ipaddress.IPv4Address):
-    return run_command(
-        [
-            "netsh",
-            "interface",
-            "ipv4",
-            "set",
-            "address",
-            "name=" + tun_name,
-            "static",
-            str(ip),
-            "255.255.255.0",
-        ]
-    )
 
 
 def set_route(tun_name: str, ip: ipaddress.IPv4Address):

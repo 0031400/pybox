@@ -1,7 +1,10 @@
 import asyncio
 from dataclasses import dataclass
 import ipaddress
+import socket
 from typing import Any
+import dns.asyncquery
+import dns.asyncresolver
 import dns.rdatatype
 
 import dns
@@ -62,22 +65,43 @@ class UdpClient(asyncio.DatagramProtocol):
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    print(f'[resolve] {domain}')
-    # loop = asyncio.get_running_loop()
-    # results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
-    # ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    # for family, _, _, _, sock_addr in results:
-    #     if family == socket.AF_INET:
-    #         ips.append(ipaddress.IPv4Address(sock_addr[0]))
-    #     if family == socket.AF_INET6:
-    #         ips.append(ipaddress.IPv6Address(sock_addr[0]))
-    # return ips
-    response = dns.query.udp(
-        dns.message.make_query(domain, "A"), "119.29.29.29", source=globals.LOCAL_IPV4
-    )
+    print(f"[resolve] {domain}")
+    if not globals.LOCAL_IPV4:
+        loop = asyncio.get_running_loop()
+        results = await loop.getaddrinfo(domain, None, type=0, proto=0, flags=0)
+        ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for family, _, _, _, sock_addr in results:
+            if family == socket.AF_INET:
+                ips.append(ipaddress.IPv4Address(sock_addr[0]))
+            if family == socket.AF_INET6:
+                ips.append(ipaddress.IPv6Address(sock_addr[0]))
+        return ips
+    if globals.LOCAL_IPV4:
+        answers = (
+            await dns.asyncquery.udp(
+                dns.message.make_query(domain, "A"),
+                "119.29.29.29",
+                source=globals.LOCAL_IPV4,
+            )
+        ).answer
+    else:
+        answers = (
+            await dns.asyncquery.udp(
+                dns.message.make_query(domain, "A"),
+                "119.29.29.29",
+            )
+        ).answer
+        answers += (
+            await dns.asyncquery.udp(
+                dns.message.make_query(domain, "AAAA"),
+                "119.29.29.29",
+            )
+        ).answer
+
     ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
-    for rrset in response.answer:
+    for rrset in answers:
         for rr in rrset:
             if rrset.rdtype == dns.rdatatype.A or rrset.rdtype == dns.rdatatype.AAAA:
                 ips.append(ipaddress.ip_address(rr.address))
+    print(f"[resolve] {domain} -> {','.join([str(ip) for ip in ips])}")
     return ips

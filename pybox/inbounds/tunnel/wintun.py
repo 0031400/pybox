@@ -70,7 +70,7 @@ class WinTun:
 
         self._dll.WintunGetAdapterLUID.argtypes = [
             ctypes.c_void_p,
-            ctypes.POINTER(NET_LUID),
+            ctypes.POINTER(ctypes.c_ulonglong),
         ]
         self._dll.WintunGetAdapterLUID.restype = None
         self._dll.WintunEndSession.argtypes = [WINTUN_SESSION_HANDLE]
@@ -108,8 +108,10 @@ class WinTun:
         raise RuntimeError(error, message)
 
     def get_luid(self):
-        luid = NET_LUID(0)
-        self._dll.WintunGetAdapterLUID(self._adapter, luid)
+        luid = ctypes.c_ulonglong(0)
+        self._dll.WintunGetAdapterLUID(self._adapter, ctypes.byref(luid))
+        if not luid.value:
+            raise RuntimeError("get luid fail")
         return luid.value
 
     def create_adapter(self):
