@@ -29,22 +29,24 @@ class HttpsDnsServer(DnsServer):
         if self.insecure:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-        sock = await connnect_ip(self.server, self.server_port)
-        reader, writer = await asyncio.open_connection(
-            sock=sock, ssl=context, server_hostname=self.server_hostname
-        )
-        https_request = (
-            f"POST {self.path} HTTP/1.1\r\n"
-            f"Host: {self.host}\r\n"
-            f"Content-Type: application/dns-message\r\n"
-            f"Content-Length: {len(request)}\r\n"
-            f"Connection: close\r\n"
-            f"\r\n"
-        ).encode()
-        writer.write(https_request + request)
-        await writer.drain()
-        byte_array = bytearray()
         try:
+            sock = await asyncio.wait_for(
+                connnect_ip(self.server, self.server_port), self.time_out
+            )
+            reader, writer = await asyncio.open_connection(
+                sock=sock, ssl=context, server_hostname=self.server_hostname
+            )
+            https_request = (
+                f"POST {self.path} HTTP/1.1\r\n"
+                f"Host: {self.host}\r\n"
+                f"Content-Type: application/dns-message\r\n"
+                f"Content-Length: {len(request)}\r\n"
+                f"Connection: close\r\n"
+                f"\r\n"
+            ).encode()
+            writer.write(https_request + request)
+            await writer.drain()
+            byte_array = bytearray()
             status_line = await asyncio.wait_for(
                 reader.readuntil(b"\r\n"), self.time_out
             )

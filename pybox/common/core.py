@@ -1,5 +1,5 @@
 import asyncio
-import threading
+from .log import log
 
 import dns.message
 import dns.rdatatype
@@ -68,21 +68,24 @@ class Core:
     async def _handle_dns_session(self, session: UdpSession):
         if not self.dns_router or not self.dns_center:
             return
-        domain = str(from_wire(session.data).question[0].name)
-        tag = self.dns_router.route(domain)
-        log("dns", f"{tag} <- {domain}")
-        response_data = await self.dns_center.query(tag, session.data)
-        response = dns.message.from_wire(response_data)
-        ips: list[str] = []
-        for rrset in response.answer:
-            if rrset.rdtype == dns.rdatatype.CNAME:
-                for rdata in rrset:
-                    ips.append(str(rdata.target))
-            if rrset.rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA]:
-                for rdata in rrset:
-                    ips.append(str(rdata.address))
-        log("dns", f"{domain} -> {tag} -> {','.join(ips)}")
-        self.dns_center.send(UdpSession(response_data, session.ip, session.port))
+        try:
+            domain = str(from_wire(session.data).question[0].name)
+            tag = self.dns_router.route(domain)
+            log("dns", f"{tag} <- {domain}")
+            response_data = await self.dns_center.query(tag, session.data)
+            response = dns.message.from_wire(response_data)
+            ips: list[str] = []
+            for rrset in response.answer:
+                if rrset.rdtype == dns.rdatatype.CNAME:
+                    for rdata in rrset:
+                        ips.append(str(rdata.target))
+                if rrset.rdtype in [dns.rdatatype.A, dns.rdatatype.AAAA]:
+                    for rdata in rrset:
+                        ips.append(str(rdata.address))
+            log("dns", f"{domain} -> {tag} -> {','.join(ips)}")
+            self.dns_center.send(UdpSession(response_data, session.ip, session.port))
+        except Exception as e:
+            log("error", e)
 
     async def _handle_session(self, session: Session):
         hostname = sniff_tls_hostname(session.initial_data)
