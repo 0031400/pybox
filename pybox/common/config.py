@@ -105,7 +105,7 @@ class DnsServerConfig:
     tls: TlsConfig | None
     path: str | None
     headers: dict[str, str] | None
-    bootstrap_address: str | None
+    host: str | None
 
 
 @dataclass
@@ -176,7 +176,7 @@ def parse_inbound(data: dict) -> InboundConfig:
         data.get("tun_next_ipv4"),
         data.get("tun_ipv6"),
         data.get("tun_next_ipv6"),
-        data.get('auto_route')
+        data.get("auto_route"),
     )
 
 
@@ -257,7 +257,7 @@ def parse_dns_server(data: dict) -> DnsServerConfig:
         tls,
         data.get("path"),
         data.get("headers"),
-        data.get("bootstrap-address"),
+        data.get("host"),
     )
 
 

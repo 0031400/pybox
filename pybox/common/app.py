@@ -5,6 +5,7 @@ import re
 from pybox.common.log import log
 from ..dns.dns import DnsCenter
 from ..dns.router import DnsRouteRule, DnsRouter
+from ..dns.servers.https import HttpsDnsServer
 from ..dns.servers.server import DnsServer
 from ..dns.servers.tls import TlsDnsServer
 from ..dns.servers.udp import UdpDnsServer
@@ -140,8 +141,6 @@ def create_listener(config: InboundConfig) -> Listener:
 
 def create_dns_server(config: DnsServerConfig) -> DnsServer:
     bootstrap_address_ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
-    if config.bootstrap_address:
-        bootstrap_address_ip = ipaddress.ip_address(config.bootstrap_address)
     if config.type == "udp":
         if not config.server or not config.server_port:
             raise RuntimeError("udp dns server error")
@@ -162,6 +161,22 @@ def create_dns_server(config: DnsServerConfig) -> DnsServer:
             config.server_port,
             config.tls.server_name or config.server,
             config.tls.insecure,
+        )
+    elif config.type == "https":
+        if (
+            not config.server
+            or not config.server_port
+            or not config.tls
+            or not config.tls.enabled
+        ):
+            raise RuntimeError("https dns server error")
+        return HttpsDnsServer(
+            ipaddress.ip_address(config.server),
+            config.server_port,
+            config.tls.server_name or config.server,
+            config.tls.insecure,
+            config.path or "/dns-query",
+            config.host or "",
         )
     raise RuntimeError("unsupport dns server type")
 
