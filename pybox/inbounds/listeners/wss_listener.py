@@ -39,7 +39,10 @@ class WssListener(Listener):
             await ws.close()
         connection = WsConnection(ws)
         await self.queue.put(connection)
-        await ws.wait_closed()
+        try:
+            await ws.wait_closed()
+        except Exception:
+            pass
 
     async def accept(self) -> Connection:
         return await self.queue.get()

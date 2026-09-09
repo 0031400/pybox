@@ -94,7 +94,5 @@ async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Add
         for rr in rrset:
             if rrset.rdtype == dns.rdatatype.A or rrset.rdtype == dns.rdatatype.AAAA:
                 ips.append(ipaddress.ip_address(rr.address))
-    if domain in ["fonts.gstatic.com", "fonts.googleapis.com"]:
-        ips = [ipaddress.IPv4Address("120.253.244.225")]
     log("resolve", f"{domain} -> {','.join([str(ip) for ip in ips])}")
     return ips

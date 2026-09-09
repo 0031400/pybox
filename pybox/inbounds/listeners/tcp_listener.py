@@ -18,12 +18,15 @@ class TcpListener(Listener):
     async def start(self):
         self.server = await asyncio.start_server(self._handle, self.host, self.port)
         for sock in self.server.sockets:
-            log("listen",f"tcp://{format_socket_address(sock.getsockname())}")
+            log("listen", f"tcp://{format_socket_address(sock.getsockname())}")
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         connection = TcpConnection(reader, writer)
         await self.queue.put(connection)
-        await writer.wait_closed()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
 
     async def accept(self) -> TcpConnection:
         return await self.queue.get()
