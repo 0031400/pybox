@@ -1,6 +1,6 @@
 import websockets
 
-from ...common.network import open_tcp_sock
+from ...common.network import connect_address
 from ...connections.connection import Connection
 
 from ...common.address import Address, host_port_to_addr
@@ -14,7 +14,7 @@ class WsTransport(Transport):
         self.headers = headers
 
     async def connect(self, destination: Address) -> Connection:
-        sock = await open_tcp_sock(destination)
+        sock = await connect_address(destination)
         key = next((k for k in self.headers if k.lower() == "host"), None)
         if key:
             host_dst = host_port_to_addr(self.headers[key], destination.port)

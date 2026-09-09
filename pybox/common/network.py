@@ -33,26 +33,27 @@ def set_default_local_addr():
         log("ipv6", globals.LOCAL_IPV6)
 
 
-async def open_tcp_sock(destination: Address) -> socket.socket:
+async def connnect_ip(ip: IPv4Address | IPv6Address, port: int) -> socket.socket:
+    if isinstance(ip, ipaddress.IPv4Address):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+    if globals.LOCAL_IPV4:
+        sock.bind((globals.LOCAL_IPV4, 0))
+    sock.setblocking(False)
+    loop = asyncio.get_running_loop()
+    await loop.sock_connect(sock, (str(ip), port))
+    return sock
+
+
+async def connect_address(destination: Address) -> socket.socket:
     if isinstance(destination, DOMAIN_Address):
         ips: list[IPv4Address | IPv6Address] = await resolve(destination.address)
     else:
         ips = [destination.address]
 
-    async def connect(ip: IPv4Address | IPv6Address, port: int) -> socket.socket:
-        if isinstance(ip, ipaddress.IPv4Address):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-
-        if globals.LOCAL_IPV4:
-            sock.bind((globals.LOCAL_IPV4, 0))
-        sock.setblocking(False)
-        loop = asyncio.get_running_loop()
-        await loop.sock_connect(sock, (str(ip), port))
-        return sock
-
-    tasks = [asyncio.create_task(connect(ip, destination.port)) for ip in ips]
+    tasks = [asyncio.create_task(connnect_ip(ip, destination.port)) for ip in ips]
     try:
         for future in asyncio.as_completed(tasks):
             try:

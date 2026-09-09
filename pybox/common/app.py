@@ -158,11 +158,10 @@ def create_dns_server(config: DnsServerConfig) -> DnsServer:
         ):
             raise RuntimeError("tls dns server error")
         return TlsDnsServer(
-            config.server,
+            ipaddress.ip_address(config.server),
             config.server_port,
             config.tls.server_name or config.server,
             config.tls.insecure,
-            bootstrap_address_ip,
         )
     raise RuntimeError("unsupport dns server type")
 
