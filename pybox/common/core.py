@@ -36,7 +36,7 @@ class Core:
         # dns
         if self.dns_center:
             await self.dns_center.start()
-            task = asyncio.create_task(self._dns_consume())
+            task = asyncio.create_task(self.dns_consume())
             self.tasks.append(task)
         for inbound in self.inbounds:
             task = asyncio.create_task(inbound.start())
@@ -45,30 +45,36 @@ class Core:
     async def run(self):
         tasks: list[asyncio.Task] = []
         for inbound in self.inbounds:
-            task = asyncio.create_task(self._consume(inbound))
+            task = asyncio.create_task(self.tcp_consume(inbound))
             tasks.append(task)
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _consume(self, inbound: Inbound):
-        tasks: list[asyncio.Task] = []
-        while True:
-            session = await inbound.sessions()
-            task = asyncio.create_task(self._handle_session(session))
-            tasks.append(task)
-
-    async def _dns_consume(self):
-        if not self.dns_center:
-            return
-        tasks: list[asyncio.Task] = []
-        while True:
-            session = await self.dns_center.sessions()
-            task = asyncio.create_task(self._handle_dns_session(session))
-            tasks.append(task)
-
-    async def _handle_dns_session(self, session: UdpSession):
-        if not self.dns_router or not self.dns_center:
-            return
+    async def tcp_consume(self, inbound: Inbound):
         try:
+            tasks: list[asyncio.Task] = []
+            while True:
+                session = await inbound.sessions()
+                task = asyncio.create_task(self.handle_tcp_session(session))
+                tasks.append(task)
+        except Exception as e:
+            log("error", f"tcp consume start {e}")
+
+    async def dns_consume(self):
+        try:
+            if not self.dns_center:
+                return
+            tasks: list[asyncio.Task] = []
+            while True:
+                session = await self.dns_center.sessions()
+                task = asyncio.create_task(self.handle_dns_session(session))
+                tasks.append(task)
+        except Exception as e:
+            log("error", f"dns_consume {e}")
+
+    async def handle_dns_session(self, session: UdpSession):
+        try:
+            if not self.dns_router or not self.dns_center:
+                return
             domain = str(from_wire(session.data).question[0].name)
             tag = self.dns_router.route(domain)
             log("dns", f"{tag} <- {domain}")
@@ -85,22 +91,24 @@ class Core:
             log("dns", f"{domain} -> {tag} -> {','.join(ips)}")
             self.dns_center.send(UdpSession(response_data, session.ip, session.port))
         except Exception as e:
-            log("error", e)
+            log("error", f"handle dns session {e}")
 
-    async def _handle_session(self, session: Session):
-        hostname = sniff_tls_hostname(session.initial_data)
-        if hostname and not isinstance(session.destination, DOMAIN_Address):
-            log("sniff", f"{session.destination.authority()} -> {hostname}")
-            session.destination = DOMAIN_Address(hostname, session.destination.port)
-        outbound_tag = self.router.route(session.destination)
-        outbound = self.outbounds.get(outbound_tag)
-        if not outbound:
-            raise RuntimeError("outbound not exist")
-        log("route", f"{session.destination.authority()} -> {outbound_tag}")
+    async def handle_tcp_session(self, session: Session):
         try:
+            hostname = sniff_tls_hostname(session.initial_data)
+            if hostname and not isinstance(session.destination, DOMAIN_Address):
+                log("sniff", f"{session.destination.authority()} -> {hostname}")
+                session.destination = DOMAIN_Address(hostname, session.destination.port)
+            outbound_tag = self.router.route(session.destination)
+            outbound = self.outbounds.get(outbound_tag)
+            if not outbound:
+                raise RuntimeError("outbound not exist")
+            log("route", f"{session.destination.authority()} -> {outbound_tag}")
             remote = await outbound.connect(session.destination, session.initial_data)
             await relay(session.connection, remote)
-        except Exception:
+
+        except Exception as e:
+            log("error", f"handle tcp session {e}")
             try:
                 await session.connection.close()
             except (ConnectionError, OSError):
@@ -109,11 +117,14 @@ class Core:
 
 async def relay(left: Connection, right: Connection):
     async def forward(source: Connection, target: Connection):
-        while True:
-            data = await source.read(4096)
-            if not data:
-                break
-            await target.write(data)
+        try:
+            while True:
+                data = await source.read(4096)
+                if not data:
+                    break
+                await target.write(data)
+        except Exception as e:
+            log("error", f"tcp forward {e}")
 
     task1 = asyncio.create_task(forward(left, right))
     task2 = asyncio.create_task(forward(right, left))

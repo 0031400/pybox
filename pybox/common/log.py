@@ -2,4 +2,7 @@ from typing import Any
 
 
 def log(tag: str, data: Any):
-    print(f"[{tag}] {data}")
+    if tag == "error":
+        print(f"\033[31m[{tag}]\033[0m {data}")
+    else:
+        print(f"[{tag}] {data}")

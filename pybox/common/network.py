@@ -59,7 +59,8 @@ async def connect_address(destination: Address) -> socket.socket:
             try:
                 sock = await future
                 return sock
-            except Exception:
+            except Exception as e:
+                log("error", f"connect ip {e}")
                 continue
         raise RuntimeError("fail to connect")
     finally:

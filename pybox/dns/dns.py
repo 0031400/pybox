@@ -36,8 +36,11 @@ class DnsCenter:
         asyncio.create_task(self.server_work())
 
     async def server_work(self):
-        while True:
-            await self.queue.put(await self.client.queue.get())
+        try:
+            while True:
+                await self.queue.put(await self.client.queue.get())
+        except Exception as e:
+            log("error", f"dns center server work {e}")
 
     async def query(self, tag: str, request: bytes):
         server = self.servers.get(tag)

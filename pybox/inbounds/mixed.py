@@ -12,6 +12,7 @@ from ..common.address import (
 )
 from ..connections.connection import Connection
 from ..common.session import Session
+from ..common.log import log
 import ipaddress
 
 from .inbound import Inbound
@@ -25,11 +26,14 @@ class MixedInbound(Inbound):
         self.tasks: list[asyncio.Task] = []
 
     async def start(self):
-        await self.listener.start()
-        while True:
-            connection = await self.listener.accept()
-            task = asyncio.create_task(self._handshake(connection))
-            self.tasks.append(task)
+        try:
+            await self.listener.start()
+            while True:
+                connection = await self.listener.accept()
+                task = asyncio.create_task(self.handshake(connection))
+                self.tasks.append(task)
+        except Exception as e:
+            log("error", f"mixed inbound start {e}")
 
     async def sessions(self) -> Session:
         return await self.queue.get()
@@ -122,13 +126,16 @@ class MixedInbound(Inbound):
         initial_data = b"\r\n".join(result) + b"\r\n\r\n" + remaining
         return Session(connection, destination, initial_data)
 
-    async def _handshake(self, connection: Connection):
-        first_byte = await connection.read_exactly(1)
-        if first_byte[0] == 5:
-            session = await self._socks5_handshake(connection, first_byte)
-        else:
-            session = await self._http_handshake(connection, first_byte)
-        await self.queue.put(session)
+    async def handshake(self, connection: Connection):
+        try:
+            first_byte = await connection.read_exactly(1)
+            if first_byte[0] == 5:
+                session = await self._socks5_handshake(connection, first_byte)
+            else:
+                session = await self._http_handshake(connection, first_byte)
+            await self.queue.put(session)
+        except Exception as e:
+            log("error", f"mixed handshake {e}")
 
     async def close(self):
         return await self.listener.close()

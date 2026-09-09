@@ -2,7 +2,6 @@ import asyncio
 import ipaddress
 import threading
 from typing import Any, cast
-
 from ..common.address import IPV4_Address, IPV6_Address
 from ..common import globals
 from ..common.log import log
@@ -77,68 +76,83 @@ class TunInbound(Inbound):
             self.ipv6_udp_listen_port = 0
 
     async def start(self):
-        if self.ipv4_enabled:
-            if not globals.LOCAL_IPV4:
-                log("error", "tun fail to get local ipv4")
-                self.ipv4_enabled = False
-        if self.ipv6_enabled:
-            if not globals.LOCAL_IPV6:
-                log("error", "tun fail to get local ipv6")
-                self.ipv6_enabled = False
-        if not self.ipv4_enabled and not self.ipv6_enabled:
-            raise RuntimeError("ipv4 or ipv6 must set one")
-        self.tun.start()
-        self._packet_thread = threading.Thread(target=self.packet_loop, daemon=True)
-        self._packet_thread.start()
-        self._tun_thread = threading.Thread(target=self.tun.receive_worker, daemon=True)
-        self._tun_thread.start()
-        luid = self.tun.get_luid()
-        tasks: list[asyncio.Task] = []
-        if self.ipv4_enabled:
-            assert self.tun_ipv4
-            create_ip_address(luid, self.tun_ipv4, 32)
-            await self.ipv4_tcp_listener.start()
-            self.ipv4_tcp_listen_port = self.get_tcp_ipv4_listen_port()
-            self.ipv4_udp_listener = UdpClient()
-            await self.ipv4_udp_listener.start(local_addr=(self.tun_ipv4, 0))
-            self.ipv4_udp_listen_port = (await self.ipv4_udp_listener.local_addr())[1]
-            task = asyncio.create_task(self.udp_worker(True))
-            self.tasks.append(task)
-            assert self.tun_next_ipv4
-            if self.auto_route:
-                if not set_route(self.tun_name, self.tun_next_ipv4):
-                    raise RuntimeError("fail set route")
-            task = asyncio.create_task(self.ipv4_tcp_listen_work())
-            tasks.append(task)
-        if self.ipv6_enabled:
-            assert self.tun_ipv6
-            create_ip_address(luid, self.tun_ipv6, 128)
-            await self.ipv6_tcp_listener.start()
-            self.ipv6_tcp_listen_port = self.get_tcp_ipv6_listen_port()
-            self.ipv6_udp_listener = UdpClient()
-            await self.ipv6_udp_listener.start(local_addr=(self.tun_ipv6, 0))
-            self.ipv6_udp_listen_port = (await self.ipv6_udp_listener.local_addr())[1]
-            task = asyncio.create_task(self.udp_worker(False))
-            self.tasks.append(task)
-            assert self.tun_next_ipv6
-            if self.auto_route:
-                if not set_route(self.tun_name, self.tun_next_ipv6):
-                    raise RuntimeError("fail set route")
-            task = asyncio.create_task(self.ipv6_tcp_listen_work())
-            tasks.append(task)
-        await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            if self.ipv4_enabled:
+                if not globals.LOCAL_IPV4:
+                    log("error", "tun fail to get local ipv4")
+                    self.ipv4_enabled = False
+            if self.ipv6_enabled:
+                if not globals.LOCAL_IPV6:
+                    log("error", "tun fail to get local ipv6")
+                    self.ipv6_enabled = False
+            if not self.ipv4_enabled and not self.ipv6_enabled:
+                raise RuntimeError("ipv4 or ipv6 must set one")
+            self.tun.start()
+            self._packet_thread = threading.Thread(target=self.packet_loop, daemon=True)
+            self._packet_thread.start()
+            self._tun_thread = threading.Thread(
+                target=self.tun.receive_worker, daemon=True
+            )
+            self._tun_thread.start()
+            luid = self.tun.get_luid()
+            tasks: list[asyncio.Task] = []
+            if self.ipv4_enabled:
+                assert self.tun_ipv4
+                create_ip_address(luid, self.tun_ipv4, 32)
+                await self.ipv4_tcp_listener.start()
+                self.ipv4_tcp_listen_port = self.get_tcp_ipv4_listen_port()
+                self.ipv4_udp_listener = UdpClient()
+                await self.ipv4_udp_listener.start(local_addr=(self.tun_ipv4, 0))
+                self.ipv4_udp_listen_port = (await self.ipv4_udp_listener.local_addr())[
+                    1
+                ]
+                task = asyncio.create_task(self.udp_worker(True))
+                self.tasks.append(task)
+                assert self.tun_next_ipv4
+                if self.auto_route:
+                    if not set_route(self.tun_name, self.tun_next_ipv4):
+                        raise RuntimeError("fail set route")
+                task = asyncio.create_task(self.ipv4_tcp_listen_work())
+                tasks.append(task)
+            if self.ipv6_enabled:
+                assert self.tun_ipv6
+                create_ip_address(luid, self.tun_ipv6, 128)
+                await self.ipv6_tcp_listener.start()
+                self.ipv6_tcp_listen_port = self.get_tcp_ipv6_listen_port()
+                self.ipv6_udp_listener = UdpClient()
+                await self.ipv6_udp_listener.start(local_addr=(self.tun_ipv6, 0))
+                self.ipv6_udp_listen_port = (await self.ipv6_udp_listener.local_addr())[
+                    1
+                ]
+                task = asyncio.create_task(self.udp_worker(False))
+                self.tasks.append(task)
+                assert self.tun_next_ipv6
+                if self.auto_route:
+                    if not set_route(self.tun_name, self.tun_next_ipv6):
+                        raise RuntimeError("fail set route")
+                task = asyncio.create_task(self.ipv6_tcp_listen_work())
+                tasks.append(task)
+            await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            log("error", f"tun inbound start {e}")
 
     async def ipv4_tcp_listen_work(self):
-        while True:
-            connection = await self.ipv4_tcp_listener.accept()
-            task = asyncio.create_task(self.tcp_handshake(connection))
-            self.tasks.append(task)
+        try:
+            while True:
+                connection = await self.ipv4_tcp_listener.accept()
+                task = asyncio.create_task(self.tcp_handshake(connection))
+                self.tasks.append(task)
+        except Exception as e:
+            log("error", f"tun ipv4 tcp listen {e}")
 
     async def ipv6_tcp_listen_work(self):
-        while True:
-            connection = await self.ipv6_tcp_listener.accept()
-            task = asyncio.create_task(self.tcp_handshake(connection))
-            self.tasks.append(task)
+        try:
+            while True:
+                connection = await self.ipv6_tcp_listener.accept()
+                task = asyncio.create_task(self.tcp_handshake(connection))
+                self.tasks.append(task)
+        except Exception as e:
+            log("error", f"tun ipv6 tcp listen {e}")
 
     async def close(self):
         self.tun.stop()
@@ -296,66 +310,78 @@ class TunInbound(Inbound):
         self.tun.send(bytes(packet))
 
     async def tcp_handshake(self, connection: TcpConnection):
-        peer = connection.writer.get_extra_info("peername")
-        nat_port = cast(int, peer[1])
-        ip = ipaddress.ip_address(peer[0])
-        if ip.version == 4:
-            nat_session = self.ipv4_tcp_nat.lookup_back(nat_port)
-        else:
-            nat_session = self.ipv6_tcp_nat.lookup_back(nat_port)
-        if not nat_session:
-            raise RuntimeError("fail to find nat session")
-        initial_data = await connection.read(4096)
-        session = Session(
-            connection,
-            (
-                IPV4_Address(nat_session.dst_ip, nat_session.dst_port)
-                if nat_session.dst_ip.version == 4
-                else IPV6_Address(nat_session.dst_ip, nat_session.dst_port)
-            ),
-            initial_data,
-        )
-        await self.tcp_queue.put(session)
-
-    async def udp_worker(self, is_v4: bool):
-        while True:
-            if is_v4:
-                udp_session = await self.ipv4_udp_listener.sessions()
-                nat_port = udp_session.port
-                nat_session = self.ipv4_udp_nat.lookup_back(nat_port)
-                local_ip = globals.LOCAL_IPV4
+        try:
+            peer = connection.writer.get_extra_info("peername")
+            nat_port = cast(int, peer[1])
+            ip = ipaddress.ip_address(peer[0])
+            if ip.version == 4:
+                nat_session = self.ipv4_tcp_nat.lookup_back(nat_port)
             else:
-                udp_session = await self.ipv6_udp_listener.sessions()
-                nat_port = udp_session.port
-                nat_session = self.ipv6_udp_nat.lookup_back(nat_port)
-                local_ip = globals.LOCAL_IPV6
+                nat_session = self.ipv6_tcp_nat.lookup_back(nat_port)
             if not nat_session:
                 raise RuntimeError("fail to find nat session")
-            client = UdpClient()
-            await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
-            client.send(
-                UdpSession(
-                    udp_session.data,
-                    ipaddress.ip_address(nat_session.dst_ip),
-                    nat_session.dst_port,
-                )
+            initial_data = await connection.read(4096)
+            session = Session(
+                connection,
+                (
+                    IPV4_Address(nat_session.dst_ip, nat_session.dst_port)
+                    if nat_session.dst_ip.version == 4
+                    else IPV6_Address(nat_session.dst_ip, nat_session.dst_port)
+                ),
+                initial_data,
             )
-            if is_v4:
-                self.ipv4_udp_dict[nat_session.src_port] = client
-            else:
-                self.ipv6_udp_dict[nat_session.src_port] = client
-            asyncio.create_task(self.udp_client_worker(client, nat_port, is_v4))
+            await self.tcp_queue.put(session)
+        
+        except Exception as e:
+            log("error", f"tun tcp handshake {e}")
+
+    async def udp_worker(self, is_v4: bool):
+        try:
+            while True:
+                if is_v4:
+                    udp_session = await self.ipv4_udp_listener.sessions()
+                    nat_port = udp_session.port
+                    nat_session = self.ipv4_udp_nat.lookup_back(nat_port)
+                    local_ip = globals.LOCAL_IPV4
+                else:
+                    udp_session = await self.ipv6_udp_listener.sessions()
+                    nat_port = udp_session.port
+                    nat_session = self.ipv6_udp_nat.lookup_back(nat_port)
+                    local_ip = globals.LOCAL_IPV6
+                if not nat_session:
+                    raise RuntimeError("fail to find nat session")
+                client = UdpClient()
+                await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
+                client.send(
+                    UdpSession(
+                        udp_session.data,
+                        ipaddress.ip_address(nat_session.dst_ip),
+                        nat_session.dst_port,
+                    )
+                )
+                if is_v4:
+                    self.ipv4_udp_dict[nat_session.src_port] = client
+                else:
+                    self.ipv6_udp_dict[nat_session.src_port] = client
+                asyncio.create_task(self.udp_client_worker(client, nat_port, is_v4))
+
+        except Exception as e:
+            log("error", f"tun udp worker {e}")
 
     async def udp_client_worker(self, client: UdpClient, nat_port: int, is_v4: bool):
-        while True:
-            session = await client.sessions()
-            if is_v4:
-                assert self.tun_next_ipv4
-                self.ipv4_udp_listener.send(
-                    UdpSession(session.data, self.tun_next_ipv4, nat_port)
-                )
-            else:
-                assert self.tun_next_ipv6
-                self.ipv6_udp_listener.send(
-                    UdpSession(session.data, self.tun_next_ipv6, nat_port)
-                )
+        try:
+            while True:
+                session = await client.sessions()
+                if is_v4:
+                    assert self.tun_next_ipv4
+                    self.ipv4_udp_listener.send(
+                        UdpSession(session.data, self.tun_next_ipv4, nat_port)
+                    )
+                else:
+                    assert self.tun_next_ipv6
+                    self.ipv6_udp_listener.send(
+                        UdpSession(session.data, self.tun_next_ipv6, nat_port)
+                    )
+
+        except Exception as e:
+            log("error", f"tun udp client worker {e}")
