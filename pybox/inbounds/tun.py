@@ -45,7 +45,9 @@ class TunInbound(Inbound):
         tun_next_ipv4: ipaddress.IPv4Address | None,
         tun_ipv6: ipaddress.IPv6Address | None,
         tun_next_ipv6: ipaddress.IPv6Address | None,
+        auto_route: bool,
     ) -> None:
+        self.auto_route = auto_route
         self.tun_ipv4 = tun_ipv4
         self.tun_next_ipv4 = tun_next_ipv4
         self.tun_ipv6 = tun_ipv6
@@ -103,8 +105,9 @@ class TunInbound(Inbound):
             task = asyncio.create_task(self.udp_worker(True))
             self.tasks.append(task)
             assert self.tun_next_ipv4
-            if not set_route(self.tun_name, self.tun_next_ipv4):
-                raise RuntimeError("fail set route")
+            if self.auto_route:
+                if not set_route(self.tun_name, self.tun_next_ipv4):
+                    raise RuntimeError("fail set route")
             task = asyncio.create_task(self.ipv4_tcp_listen_work())
             tasks.append(task)
         if self.ipv6_enabled:
@@ -118,8 +121,9 @@ class TunInbound(Inbound):
             task = asyncio.create_task(self.udp_worker(False))
             self.tasks.append(task)
             assert self.tun_next_ipv6
-            if not set_route(self.tun_name, self.tun_next_ipv6):
-                raise RuntimeError("fail set route")
+            if self.auto_route:
+                if not set_route(self.tun_name, self.tun_next_ipv6):
+                    raise RuntimeError("fail set route")
             task = asyncio.create_task(self.ipv6_tcp_listen_work())
             tasks.append(task)
         await asyncio.gather(*tasks, return_exceptions=True)

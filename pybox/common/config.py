@@ -30,6 +30,7 @@ class InboundConfig:
     tun_next_ipv4: str | None
     tun_ipv6: str | None
     tun_next_ipv6: str | None
+    auto_route: bool | None
 
 
 @dataclass
@@ -175,6 +176,7 @@ def parse_inbound(data: dict) -> InboundConfig:
         data.get("tun_next_ipv4"),
         data.get("tun_ipv6"),
         data.get("tun_next_ipv6"),
+        data.get('auto_route')
     )
 
 

@@ -183,6 +183,7 @@ def create_inbound(config: InboundConfig) -> Inbound:
             ipaddress.IPv4Address(config.tun_next_ipv4),
             ipaddress.IPv6Address(config.tun_ipv6),
             ipaddress.IPv6Address(config.tun_next_ipv6),
+            config.auto_route or False,
         )
     raise RuntimeError("unsupport inbound type")
 
