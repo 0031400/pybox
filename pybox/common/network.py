@@ -15,18 +15,22 @@ def set_default_local_addr():
     try:
         sock.connect(("223.5.5.5", 53))
         globals.LOCAL_IPV4 = sock.getsockname()[0]
+    except Exception as e:
+        log("error", e)
     finally:
         sock.close()
     sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
     try:
         sock.connect(("2400:3200::1", 53))
         globals.LOCAL_IPV6 = sock.getsockname()[0]
+    except Exception as e:
+        log("error", e)
     finally:
         sock.close()
-    if not globals.LOCAL_IPV4:
-        log("[ipv4]", globals.LOCAL_IPV4)
-    if not globals.LOCAL_IPV6:
-        log("[ipv6]", globals.LOCAL_IPV6)
+    if globals.LOCAL_IPV4:
+        log("ipv4", globals.LOCAL_IPV4)
+    if globals.LOCAL_IPV6:
+        log("ipv6", globals.LOCAL_IPV6)
 
 
 async def open_tcp_sock(destination: Address) -> socket.socket:

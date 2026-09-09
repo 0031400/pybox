@@ -75,10 +75,16 @@ class TunInbound(Inbound):
             self.ipv6_udp_listen_port = 0
 
     async def start(self):
-        if not globals.LOCAL_IPV4 and self.ipv4_enabled:
-            raise RuntimeError("tun should get local ipv4")
-        if not globals.LOCAL_IPV6 and self.ipv6_enabled:
-            raise RuntimeError("tun should get local ipv6")
+        if self.ipv4_enabled:
+            if not globals.LOCAL_IPV4:
+                log("error", "tun fail to get local ipv4")
+                self.ipv4_enabled = False
+        if self.ipv6_enabled:
+            if not globals.LOCAL_IPV6:
+                log("error", "tun fail to get local ipv6")
+                self.ipv6_enabled = False
+        if not self.ipv4_enabled and not self.ipv6_enabled:
+            raise RuntimeError("ipv4 or ipv6 must set one")
         self.tun.start()
         self._packet_thread = threading.Thread(target=self.packet_loop, daemon=True)
         self._packet_thread.start()
