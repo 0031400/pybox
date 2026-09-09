@@ -73,23 +73,27 @@ class MIB_UNICASTIPADDRESS_ROW(ctypes.Structure):
     ]
 
 
-def create_ipv4_address(luid: int, ip: ipaddress.IPv4Address, prefix_length: int = 24):
+def create_ip_address(
+    luid: int,
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    prefix_length: int,
+):
     _iphlpapi = ctypes.WinDLL("iphlpapi.dll")
-
     _iphlpapi.CreateUnicastIpAddressEntry.argtypes = [
         ctypes.POINTER(MIB_UNICASTIPADDRESS_ROW),
     ]
     _iphlpapi.CreateUnicastIpAddressEntry.restype = ctypes.c_ulong
-    _iphlpapi.InitializeUnicastIpAddressEntry.argtypes = [
-        ctypes.POINTER(MIB_UNICASTIPADDRESS_ROW),
-    ]
-    _iphlpapi.InitializeUnicastIpAddressEntry.restype = None
     row = MIB_UNICASTIPADDRESS_ROW()
-    # _iphlpapi.InitializeUnicastIpAddressEntry(ctypes.byref(row))
-    row.Address.Ipv4.sin_family = 2
-    row.Address.Ipv4.sin_port = 0
-    row.Address.Ipv4.sin_addr.S_un_b[:] = ip.packed
-    row.Address.Ipv4.sin_zero[:] = b"\x00" * 8
+    if ip.version == 4:
+        row.Address.Ipv4.sin_family = 2
+        row.Address.Ipv4.sin_port = 0
+        row.Address.Ipv4.sin_addr.S_un_b[:] = ip.packed
+        row.Address.Ipv4.sin_zero[:] = b"\x00" * 8
+    else:
+        row.Address.Ipv6.sin6_family = 23
+        row.Address.Ipv6.sin6_port = 0
+        row.Address.Ipv6.sin6_addr.Byte[:] = ip.packed
+
     row.InterfaceLuid = ctypes.c_ulonglong(luid)
     row.InterfaceIndex = 0
     row.PrefixOrigin = 1
@@ -120,15 +124,16 @@ def run_command(command: list[str]):
     return task.returncode == 0
 
 
-def set_route(tun_name: str, ip: ipaddress.IPv4Address):
+def set_route(tun_name: str, ip: ipaddress.IPv4Address | ipaddress.IPv6Address):
+    is_v4 = ip.version == 4
     return run_command(
         [
             "netsh",
             "interface",
-            "ipv4",
+            "ipv4" if is_v4 else "ipv6",
             "add",
             "route",
-            "0.0.0.0/0",
+            "0.0.0.0/0" if is_v4 else "::/0",
             tun_name,
             str(ip),
             "metric=20",

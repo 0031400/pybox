@@ -59,7 +59,7 @@ class UdpClient(asyncio.DatagramProtocol):
         self.tasks: list[asyncio.Task] = []
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        task=asyncio.create_task(
+        task = asyncio.create_task(
             self.center.queue.put(
                 DnsSession(data, ipaddress.ip_address(addr[0]), addr[1])
             )
@@ -106,5 +106,7 @@ async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Add
         for rr in rrset:
             if rrset.rdtype == dns.rdatatype.A or rrset.rdtype == dns.rdatatype.AAAA:
                 ips.append(ipaddress.ip_address(rr.address))
+    if domain in ["fonts.gstatic.com", "fonts.googleapis.com"]:
+        ips = [ipaddress.IPv4Address("120.253.244.225")]
     log("resolve", f"{domain} -> {','.join([str(ip) for ip in ips])}")
     return ips
