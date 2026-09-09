@@ -6,7 +6,7 @@ from typing import Any, cast
 from ..common.address import IPV4_Address, IPV6_Address
 from ..common import globals
 from ..common.log import log
-from ..common.udp import UdpClient
+from ..common.udp import UdpClient, UdpSession
 from ..connections.tcp import TcpConnection
 from .inbound import Inbound
 from .listeners.tcp_listener import TcpListener
@@ -320,11 +320,13 @@ class TunInbound(Inbound):
     async def udp_worker(self, is_v4: bool):
         while True:
             if is_v4:
-                data, ip, nat_port = await self.ipv4_udp_listener.sessions()
+                udp_session = await self.ipv4_udp_listener.sessions()
+                nat_port = udp_session.port
                 nat_session = self.ipv4_udp_nat.lookup_back(nat_port)
                 local_ip = globals.LOCAL_IPV4
             else:
-                data, ip, nat_port = await self.ipv6_udp_listener.sessions()
+                udp_session = await self.ipv6_udp_listener.sessions()
+                nat_port = udp_session.port
                 nat_session = self.ipv6_udp_nat.lookup_back(nat_port)
                 local_ip = globals.LOCAL_IPV6
             if not nat_session:
@@ -332,7 +334,11 @@ class TunInbound(Inbound):
             client = UdpClient()
             await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
             client.send(
-                data, ipaddress.ip_address(nat_session.dst_ip), nat_session.dst_port
+                UdpSession(
+                    udp_session.data,
+                    ipaddress.ip_address(nat_session.dst_ip),
+                    nat_session.dst_port,
+                )
             )
             if is_v4:
                 self.ipv4_udp_dict[nat_session.src_port] = client
@@ -342,10 +348,14 @@ class TunInbound(Inbound):
 
     async def udp_client_worker(self, client: UdpClient, nat_port: int, is_v4: bool):
         while True:
-            data, _, _ = await client.sessions()
+            session = await client.sessions()
             if is_v4:
                 assert self.tun_next_ipv4
-                self.ipv4_udp_listener.send(data, self.tun_next_ipv4, nat_port)
+                self.ipv4_udp_listener.send(
+                    UdpSession(session.data, self.tun_next_ipv4, nat_port)
+                )
             else:
                 assert self.tun_next_ipv6
-                self.ipv6_udp_listener.send(data, self.tun_next_ipv6, nat_port)
+                self.ipv6_udp_listener.send(
+                    UdpSession(session.data, self.tun_next_ipv6, nat_port)
+                )

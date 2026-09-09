@@ -4,7 +4,7 @@ import threading
 import dns.message
 import dns.rdatatype
 from ..connections.connection import Connection
-from ..dns.dns import DnsCenter, DnsSession
+from ..dns.dns import DnsCenter, UdpSession
 from ..dns.router import DnsRouteRule, DnsRouter
 from ..inbounds.inbound import Inbound
 from ..outbounds.outbound import Outbound
@@ -63,14 +63,15 @@ class Core:
         while True:
             session = await self.dns_center.sessions()
             task = asyncio.create_task(self._handle_dns_session(session))
+            tasks.append(task)
 
-    async def _handle_dns_session(self, session: DnsSession):
+    async def _handle_dns_session(self, session: UdpSession):
         if not self.dns_router or not self.dns_center:
             return
-        domain = str(from_wire(session.request).question[0].name)
+        domain = str(from_wire(session.data).question[0].name)
         tag = self.dns_router.route(domain)
         log("dns", f"{tag} <- {domain}")
-        response_data = await self.dns_center.query(tag, session.request)
+        response_data = await self.dns_center.query(tag, session.data)
         response = dns.message.from_wire(response_data)
         ips: list[str] = []
         for rrset in response.answer:
@@ -81,7 +82,7 @@ class Core:
                 for rdata in rrset:
                     ips.append(str(rdata.address))
         log("dns", f"{domain} -> {tag} -> {','.join(ips)}")
-        self.dns_center.send(response_data, (str(session.ip), session.port))
+        self.dns_center.send(UdpSession(response_data, session.ip, session.port))
 
     async def _handle_session(self, session: Session):
         hostname = sniff_tls_hostname(session.initial_data)

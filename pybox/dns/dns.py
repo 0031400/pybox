@@ -8,19 +8,13 @@ import dns.asyncresolver
 import dns.rdatatype
 
 import dns
+from ..common.udp import UdpClient, UdpSession
 import dns.message
 import dns.query
 from ..common import globals
 
 from ..common.log import log
 from .servers.server import DnsServer
-
-
-@dataclass
-class DnsSession:
-    request: bytes
-    ip: ipaddress.IPv4Address | ipaddress.IPv6Address
-    port: int
 
 
 class DnsCenter:
@@ -30,15 +24,20 @@ class DnsCenter:
         self.servers = servers
         self.listen = listen
         self.listen_port = listen_port
-        self.queue: asyncio.Queue[DnsSession] = asyncio.Queue()
+        self.queue: asyncio.Queue[UdpSession] = asyncio.Queue()
+        self.client = UdpClient()
 
     async def start(self):
         if not self.listen or not self.listen_port:
             raise RuntimeError("dns need listen addr")
-        loop = asyncio.get_running_loop()
-        self.transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UdpClient(self), local_addr=(self.listen, self.listen_port)
+        await self.client.start(
+            local_addr=(ipaddress.ip_address(self.listen), self.listen_port)
         )
+        asyncio.create_task(self.server_work())
+
+    async def server_work(self):
+        while True:
+            await self.queue.put(await self.client.queue.get())
 
     async def query(self, tag: str, request: bytes):
         server = self.servers.get(tag)
@@ -46,25 +45,11 @@ class DnsCenter:
             raise RuntimeError("fial to find dns server")
         return await server.query(request)
 
-    async def sessions(self) -> DnsSession:
+    async def sessions(self) -> UdpSession:
         return await self.queue.get()
 
-    def send(self, data: bytes, addr: tuple[str, int]):
-        self.transport.sendto(data, addr)
-
-
-class UdpClient(asyncio.DatagramProtocol):
-    def __init__(self, center: DnsCenter) -> None:
-        self.center = center
-        self.tasks: list[asyncio.Task] = []
-
-    def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-        task = asyncio.create_task(
-            self.center.queue.put(
-                DnsSession(data, ipaddress.ip_address(addr[0]), addr[1])
-            )
-        )
-        self.tasks.append(task)
+    def send(self, session: UdpSession):
+        self.client.send(session)
 
 
 async def resolve(domain: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:

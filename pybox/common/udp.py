@@ -1,27 +1,31 @@
 import asyncio
+from dataclasses import dataclass
 import ipaddress
 from typing import Any
+
+
+@dataclass
+class UdpSession:
+    data: bytes
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address
+    port: int
 
 
 class UdpClient:
     class Client(asyncio.DatagramProtocol):
         def __init__(
             self,
-            queue: asyncio.Queue[
-                tuple[bytes, ipaddress.IPv4Address | ipaddress.IPv6Address, int]
-            ],
+            queue: asyncio.Queue[UdpSession],
         ) -> None:
             self.queue = queue
 
         def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
             asyncio.create_task(
-                self.queue.put((data, ipaddress.ip_address(addr[0]), addr[1]))
+                self.queue.put(UdpSession(data, ipaddress.ip_address(addr[0]), addr[1]))
             )
 
     def __init__(self) -> None:
-        self.queue: asyncio.Queue[
-            tuple[bytes, ipaddress.IPv4Address | ipaddress.IPv6Address, int]
-        ] = asyncio.Queue()
+        self.queue: asyncio.Queue[UdpSession] = asyncio.Queue()
         self.transport: asyncio.DatagramTransport | None = None
 
     async def start(
@@ -60,9 +64,7 @@ class UdpClient:
             self.transport.close()
             self.transport = None
 
-    def send(
-        self, data: bytes, ip: ipaddress.IPv4Address | ipaddress.IPv6Address, port: int
-    ):
+    def send(self, session: UdpSession):
         if not self.transport:
             raise RuntimeError("udp socket has closed")
-        self.transport.sendto(data, (str(ip), port))
+        self.transport.sendto(session.data, (str(session.ip), session.port))
