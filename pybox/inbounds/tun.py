@@ -331,7 +331,7 @@ class TunInbound(Inbound):
                 initial_data,
             )
             await self.tcp_queue.put(session)
-        
+
         except Exception as e:
             log("error", f"tun tcp handshake {e}")
 
@@ -350,8 +350,18 @@ class TunInbound(Inbound):
                     local_ip = globals.LOCAL_IPV6
                 if not nat_session:
                     raise RuntimeError("fail to find nat session")
-                client = UdpClient()
-                await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
+                if is_v4:
+                    client = self.ipv4_udp_dict.get(nat_session.src_port)
+                else:
+                    client = self.ipv6_udp_dict.get(nat_session.src_port)
+                if not client:
+                    client = UdpClient()
+                    await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
+                    if is_v4:
+                        self.ipv4_udp_dict[nat_session.src_port] = client
+                    else:
+                        self.ipv6_udp_dict[nat_session.src_port] = client
+                    asyncio.create_task(self.udp_client_worker(client, nat_port, is_v4))
                 client.send(
                     UdpSession(
                         udp_session.data,
@@ -359,11 +369,6 @@ class TunInbound(Inbound):
                         nat_session.dst_port,
                     )
                 )
-                if is_v4:
-                    self.ipv4_udp_dict[nat_session.src_port] = client
-                else:
-                    self.ipv6_udp_dict[nat_session.src_port] = client
-                asyncio.create_task(self.udp_client_worker(client, nat_port, is_v4))
 
         except Exception as e:
             log("error", f"tun udp worker {e}")
