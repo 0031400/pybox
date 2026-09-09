@@ -4,8 +4,8 @@ import ipaddress
 
 @dataclass(frozen=True)
 class FlowKey:
-    src_ip: ipaddress.IPv4Address
-    dst_ip: ipaddress.IPv4Address
+    src_ip: ipaddress.IPv4Address | ipaddress.IPv6Address
+    dst_ip: ipaddress.IPv4Address | ipaddress.IPv6Address
     src_port: int
     dst_port: int
 

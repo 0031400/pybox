@@ -3,21 +3,29 @@ import ipaddress
 import threading
 from typing import Any, cast
 
-from ..common.address import IPV4_Address
+from ..common.address import IPV4_Address, IPV6_Address
 from ..common import globals
+from ..common.log import log
 from ..common.udp import UdpClient
 from ..connections.tcp import TcpConnection
 from .inbound import Inbound
 from .listeners.tcp_listener import TcpListener
 from .tunnel.ip import (
     is_ipv4_udp,
+    is_ipv6,
+    is_ipv6_tcp,
+    is_ipv6_udp,
     parse_ipv4_flow,
+    parse_ipv6_flow,
     replace_ipv4_flow,
+    replace_ipv6_flow,
     update_ipv4_checksum,
     update_ipv4_tcp_checksum,
     is_ipv4,
     is_ipv4_tcp,
     update_ipv4_udp_checksum,
+    update_ipv6_tcp_checksum,
+    update_ipv6_udp_checksum,
 )
 from .tunnel.nat import Nat
 from .tunnel.route import create_ip_address, set_dns, set_route
@@ -61,7 +69,7 @@ class TunInbound(Inbound):
             self.ipv4_udp_nat = Nat()
             self.ipv4_udp_listen_port = 0
         if self.ipv6_enabled:
-            self.ipv6_tcp_listener = TcpListener(str(self.tun_ipv4), 0)
+            self.ipv6_tcp_listener = TcpListener(str(self.tun_ipv6), 0)
             self.ipv6_tcp_nat = Nat()
             self.ipv6_udp_nat = Nat()
             self.ipv6_udp_listen_port = 0
@@ -86,7 +94,8 @@ class TunInbound(Inbound):
             self.ipv4_udp_listener = UdpClient()
             await self.ipv4_udp_listener.start(local_addr=(self.tun_ipv4, 0))
             self.ipv4_udp_listen_port = (await self.ipv4_udp_listener.local_addr())[1]
-            asyncio.create_task(self.ipv4_udp_worker())
+            task = asyncio.create_task(self.udp_worker(True))
+            self.tasks.append(task)
             assert self.tun_next_ipv4
             if not set_route(self.tun_name, self.tun_next_ipv4):
                 raise RuntimeError("fail set route")
@@ -94,18 +103,20 @@ class TunInbound(Inbound):
             tasks.append(task)
         if self.ipv6_enabled:
             assert self.tun_ipv6
-            create_ip_address(luid, self.tun_ipv6, 64)
+            create_ip_address(luid, self.tun_ipv6, 128)
             await self.ipv6_tcp_listener.start()
             self.ipv6_tcp_listen_port = self.get_tcp_ipv6_listen_port()
             self.ipv6_udp_listener = UdpClient()
             await self.ipv6_udp_listener.start(local_addr=(self.tun_ipv6, 0))
             self.ipv6_udp_listen_port = (await self.ipv6_udp_listener.local_addr())[1]
+            task = asyncio.create_task(self.udp_worker(False))
+            self.tasks.append(task)
             assert self.tun_next_ipv6
             if not set_route(self.tun_name, self.tun_next_ipv6):
                 raise RuntimeError("fail set route")
             task = asyncio.create_task(self.ipv6_tcp_listen_work())
             tasks.append(task)
-        asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def ipv4_tcp_listen_work(self):
         while True:
@@ -115,7 +126,7 @@ class TunInbound(Inbound):
 
     async def ipv6_tcp_listen_work(self):
         while True:
-            connection = await self.ipv4_tcp_listener.accept()
+            connection = await self.ipv6_tcp_listener.accept()
             task = asyncio.create_task(self.tcp_handshake(connection))
             self.tasks.append(task)
 
@@ -149,166 +160,182 @@ class TunInbound(Inbound):
             packet = bytearray(packet_bytes)
             if is_ipv4(packet):
                 if is_ipv4_tcp(packet):
-                    self._deal_ipv4_tcp(packet)
+                    self.deal_packet_nat(packet, True, True)
                 elif is_ipv4_udp(packet):
-                    self._deal_ipv4_udp(packet)
+                    self.deal_packet_nat(packet, True, False)
+            elif is_ipv6(packet):
+                if is_ipv6_tcp(packet):
+                    self.deal_packet_nat(packet, False, True)
+                elif is_ipv6_udp(packet):
+                    self.deal_packet_nat(packet, False, False)
 
-    def _deal_ipv4_udp(self, packet: bytearray):
-        flow_key = parse_ipv4_flow(packet)
-        if (
-            not flow_key
-            or not self.ipv4_udp_listen_port
-            or not self.tun_next_ipv4
-            or not self.tun_ipv4
-        ):
+    def deal_packet_nat(self, packet: bytearray, is_v4: bool, is_tcp: bool):
+        if is_v4:
+            if not self.tun_next_ipv4 or not self.tun_ipv4:
+                return
+            flow_key = parse_ipv4_flow(packet)
+        else:
+            if not self.tun_next_ipv6 or not self.tun_ipv6:
+                return
+            flow_key = parse_ipv6_flow(packet)
+
+        if not flow_key:
             return
-        if (
-            self.tun_ipv4 == flow_key.src_ip
-            and self.ipv4_udp_listen_port == flow_key.src_port
-        ):
-            nat_session = self.ipv4_udp_nat.lookup_back(flow_key.dst_port)
+        flag = True
+        if is_v4:
+            if flow_key.src_ip != self.tun_ipv4:
+                flag = False
+            if is_tcp:
+                if self.ipv4_tcp_listen_port != flow_key.src_port:
+                    flag = False
+            else:
+                if self.ipv4_udp_listen_port != flow_key.src_port:
+                    flag = False
+        else:
+            if flow_key.src_ip != self.tun_ipv6:
+                flag = False
+            if is_tcp:
+                if self.ipv6_tcp_listen_port != flow_key.src_port:
+                    flag = False
+            else:
+                if self.ipv6_udp_listen_port != flow_key.src_port:
+                    flag = False
+
+        if flag:
+            if is_v4:
+                if is_tcp:
+                    nat_dict = self.ipv4_tcp_nat
+                else:
+                    nat_dict = self.ipv4_udp_nat
+            else:
+                if is_tcp:
+                    nat_dict = self.ipv6_tcp_nat
+                else:
+                    nat_dict = self.ipv6_udp_nat
+            nat_session = nat_dict.lookup_back(flow_key.dst_port)
             if not nat_session:
                 return
-            replace_ipv4_flow(
-                packet,
-                nat_session.dst_ip,
-                nat_session.src_ip,
-                nat_session.dst_port,
-                nat_session.src_port,
-            )
+            if is_v4:
+                assert (
+                    self.tun_next_ipv4
+                    and self.tun_ipv4
+                    and nat_session.dst_ip.version == 4
+                    and nat_session.src_ip.version == 4
+                )
+                replace_ipv4_flow(
+                    packet,
+                    nat_session.dst_ip,
+                    nat_session.src_ip,
+                    nat_session.dst_port,
+                    nat_session.src_port,
+                )
+            else:
+                assert (
+                    self.tun_next_ipv6
+                    and self.tun_ipv6
+                    and nat_session.dst_ip.version == 6
+                    and nat_session.src_ip.version == 6
+                )
+                replace_ipv6_flow(
+                    packet,
+                    nat_session.dst_ip,
+                    nat_session.src_ip,
+                    nat_session.dst_port,
+                    nat_session.src_port,
+                )
         else:
-            nat_port = self.ipv4_udp_nat.lookup_or_create(flow_key)
-            replace_ipv4_flow(
-                packet,
-                self.tun_next_ipv4,
-                self.tun_ipv4,
-                nat_port,
-                self.ipv4_udp_listen_port,
-            )
-        update_ipv4_udp_checksum(packet)
-        update_ipv4_checksum(packet)
-        self.tun.send(bytes(packet))
-
-    def _deal_ipv4_tcp(self, packet: bytearray):
-        flow_key = parse_ipv4_flow(packet)
-        if (
-            not flow_key
-            or not self.ipv4_udp_listen_port
-            or not self.tun_next_ipv4
-            or not self.tun_ipv4
-        ):
-            return
-        if (
-            self.tun_ipv4 == flow_key.src_ip
-            and self.ipv4_tcp_listen_port == flow_key.src_port
-        ):
-            nat_session = self.ipv4_tcp_nat.lookup_back(flow_key.dst_port)
-            if not nat_session:
-                return
-            replace_ipv4_flow(
-                packet,
-                nat_session.dst_ip,
-                nat_session.src_ip,
-                nat_session.dst_port,
-                nat_session.src_port,
-            )
+            if is_v4:
+                if is_tcp:
+                    nat_port = self.ipv4_tcp_nat.lookup_or_create(flow_key)
+                else:
+                    nat_port = self.ipv4_udp_nat.lookup_or_create(flow_key)
+            else:
+                if is_tcp:
+                    nat_port = self.ipv6_tcp_nat.lookup_or_create(flow_key)
+                else:
+                    nat_port = self.ipv6_udp_nat.lookup_or_create(flow_key)
+            if is_v4:
+                assert self.tun_next_ipv4 and self.tun_ipv4
+                replace_ipv4_flow(
+                    packet,
+                    self.tun_next_ipv4,
+                    self.tun_ipv4,
+                    nat_port,
+                    self.ipv4_tcp_listen_port if is_tcp else self.ipv4_udp_listen_port,
+                )
+            else:
+                assert self.tun_next_ipv6 and self.tun_ipv6
+                replace_ipv6_flow(
+                    packet,
+                    self.tun_next_ipv6,
+                    self.tun_ipv6,
+                    nat_port,
+                    self.ipv6_tcp_listen_port if is_tcp else self.ipv6_udp_listen_port,
+                )
+        if is_v4:
+            if is_tcp:
+                update_ipv4_tcp_checksum(packet)
+            else:
+                update_ipv4_udp_checksum(packet)
+            update_ipv4_checksum(packet)
         else:
-            nat_port = self.ipv4_tcp_nat.lookup_or_create(flow_key)
-            replace_ipv4_flow(
-                packet,
-                self.tun_next_ipv4,
-                self.tun_ipv4,
-                nat_port,
-                self.ipv4_tcp_listen_port,
-            )
-        update_ipv4_tcp_checksum(packet)
-        update_ipv4_checksum(packet)
+            if is_tcp:
+                update_ipv6_tcp_checksum(packet)
+            else:
+                update_ipv6_udp_checksum(packet)
         self.tun.send(bytes(packet))
 
     async def tcp_handshake(self, connection: TcpConnection):
         peer = connection.writer.get_extra_info("peername")
         nat_port = cast(int, peer[1])
-        nat_session = self.ipv4_tcp_nat.lookup_back(nat_port)
+        ip = ipaddress.ip_address(peer[0])
+        if ip.version == 4:
+            nat_session = self.ipv4_tcp_nat.lookup_back(nat_port)
+        else:
+            nat_session = self.ipv6_tcp_nat.lookup_back(nat_port)
         if not nat_session:
             raise RuntimeError("fail to find nat session")
         initial_data = await connection.read(4096)
         session = Session(
             connection,
-            IPV4_Address(nat_session.dst_ip, nat_session.dst_port),
+            (
+                IPV4_Address(nat_session.dst_ip, nat_session.dst_port)
+                if nat_session.dst_ip.version == 4
+                else IPV6_Address(nat_session.dst_ip, nat_session.dst_port)
+            ),
             initial_data,
         )
         await self.tcp_queue.put(session)
 
-    async def ipv4_udp_worker(self):
+    async def udp_worker(self, is_v4: bool):
         while True:
-            data, ip, nat_port = await self.ipv4_udp_listener.sessions()
-            nat_session = self.ipv4_udp_nat.lookup_back(nat_port)
+            if is_v4:
+                data, ip, nat_port = await self.ipv4_udp_listener.sessions()
+                nat_session = self.ipv4_udp_nat.lookup_back(nat_port)
+                local_ip = globals.LOCAL_IPV4
+            else:
+                data, ip, nat_port = await self.ipv6_udp_listener.sessions()
+                nat_session = self.ipv6_udp_nat.lookup_back(nat_port)
+                local_ip = globals.LOCAL_IPV6
             if not nat_session:
                 raise RuntimeError("fail to find nat session")
             client = UdpClient()
-            await client.start(
-                local_addr=(ipaddress.IPv4Address(globals.LOCAL_IPV4), 0)
-            )
+            await client.start(local_addr=(ipaddress.ip_address(local_ip), 0))
             client.send(
-                data, ipaddress.IPv4Address(nat_session.dst_ip), nat_session.dst_port
+                data, ipaddress.ip_address(nat_session.dst_ip), nat_session.dst_port
             )
-            self.ipv4_udp_dict[nat_session.src_port] = client
-            asyncio.create_task(self.ipv4_udp_client_worker(client, nat_port))
+            if is_v4:
+                self.ipv4_udp_dict[nat_session.src_port] = client
+            else:
+                self.ipv6_udp_dict[nat_session.src_port] = client
+            asyncio.create_task(self.udp_client_worker(client, nat_port, is_v4))
 
-    async def ipv4_udp_client_worker(self, client: UdpClient, nat_port: int):
-        assert self.tun_next_ipv4
+    async def udp_client_worker(self, client: UdpClient, nat_port: int, is_v4: bool):
         while True:
-            data, ip, nat_port = await client.sessions()
-            self.ipv4_udp_listener.send(data, self.tun_next_ipv4, nat_port)
-
-    # async def _handle_udp_client(self, data: bytes, addr: tuple[str, int]):
-    #     nat_port = self.udp_client_map.get(addr)
-    #     if not nat_port:
-    #         raise RuntimeError("no nat port")
-    #     self.transport.sendto(data, (str(self.tun_next_ipv4), nat_port))
-
-    # async def _handle_udp_listener(self, data: bytes, addr: tuple[str, int]):
-    #     nat_port = addr[1]
-    #     # remote_transport = self.clients.get(nat_port)
-    #     # if remote_transport:
-    #     #     remote_transport.sendto(data, (nat_session.dst_ip, nat_session.dst_port))
-    #     #     return
-    #     loop = asyncio.get_running_loop()
-    #     remote_transport, protocol = await loop.create_datagram_endpoint(
-    #         lambda: UdpClient(self), local_addr=(globals.LOCAL_IPV4, 0)
-    #     )
-    #     remote_host, remote_port = transport_to_host_port(remote_transport)
-    #     # self.clients[nat_port] = remote_transport
-    #     # self.port_map[nat_port] = port
-    #     self.udp_client_map[(str(nat_session.dst_ip), nat_session.dst_port)] = nat_port
-    #     remote_transport.sendto(data, (str(nat_session.dst_ip), nat_session.dst_port))
-
-
-# class UdpListener(asyncio.DatagramProtocol):
-#     def __init__(self, tun: TunInbound) -> None:
-#         # self.clients: dict[int, asyncio.DatagramTransport] = {}
-#         # self.port_map: dict[int, int] = {}
-#         self.tun = tun
-#         self.tasks: list[asyncio.Task] = []
-
-#     # def connection_made(self, transport: asyncio.DatagramTransport) -> None:
-#     #     self.transport=transport
-#     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-#         task = asyncio.create_task(self.tun._handle_udp_listener(data, addr))
-#         self.tasks.append(task)
-
-#     # def handle_client(self,data:bytes, addr:tuple[str,int]):
-#     #     self.transport.sendto(data,)
-
-
-# class UdpClient(asyncio.DatagramProtocol):
-#     def __init__(self, tun: TunInbound) -> None:
-#         self.tun = tun
-#         self.tasks: list[asyncio.Task] = []
-
-#     # def connection_made(self, transport: asyncio.DatagramTransport) -> None:
-#     #     self.transport=transport
-#     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]) -> None:
-#         task = asyncio.create_task(self.tun._handle_udp_client(data, addr))
-#         self.tasks.append(task)
-#         # self.listener.handle_client(data, addr)
+            data, _, _ = await client.sessions()
+            if is_v4:
+                assert self.tun_next_ipv4
+                self.ipv4_udp_listener.send(data, self.tun_next_ipv4, nat_port)
+            else:
+                assert self.tun_next_ipv6
+                self.ipv6_udp_listener.send(data, self.tun_next_ipv6, nat_port)

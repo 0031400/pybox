@@ -19,11 +19,58 @@ def is_ipv4_tcp(packet: bytes | bytearray) -> bool:
 
 def is_ipv4_udp(packet: bytes | bytearray) -> bool:
     ihl = (packet[0] & 0x0F) * 4
-    return len(packet) >= ihl + 8 and 17== packet[9]
+    return len(packet) >= ihl + 8 and 17 == packet[9]
 
 
-def is_udp(packet: bytes | bytearray) -> bool:
-    return 17 == packet[9]
+def get_ipv6_transport_offset(
+    packet: bytes | bytearray,
+) -> tuple[int, int] | None:
+    if len(packet) < 40 or packet[0] >> 4 != 6:
+        return None
+    next_header = packet[6]
+    offset = 40
+    while True:
+        if next_header == 6 or next_header == 17:
+            return next_header, offset
+        if next_header == 44:
+            if len(packet) < offset + 8:
+                return None
+            next_header = packet[offset]
+            offset += 8
+            continue
+        if next_header == 51:
+            if len(packet) < offset + 2:
+                return None
+            next_header = packet[offset]
+            header_length = (packet[offset + 1] + 2) * 4
+            if len(packet) < offset + header_length:
+                return None
+            offset += header_length
+            continue
+        if next_header in (0, 43, 60):
+            if len(packet) < offset + 2:
+                return None
+            next_header = packet[offset]
+            header_length = (packet[offset + 1] + 1) * 8
+            if len(packet) < offset + header_length:
+                return None
+            offset += header_length
+            continue
+        return None
+
+
+def is_ipv6_tcp(packet: bytes | bytearray) -> bool:
+    res = get_ipv6_transport_offset(packet)
+    if not res:
+        return False
+    return res[0] == 6
+
+
+def is_ipv6_udp(packet: bytes | bytearray) -> bool:
+    res = get_ipv6_transport_offset(packet)
+    if not res:
+        return False
+    return res[0] == 17
 
 
 def parse_ipv4_flow(packet: bytes | bytearray) -> FlowKey | None:
@@ -57,6 +104,51 @@ def replace_ipv4_flow(
         "!HH",
         packet,
         ihl,
+        src_port,
+        dst_port,
+    )
+
+
+def parse_ipv6_flow(packet: bytes | bytearray) -> FlowKey | None:
+    result = get_ipv6_transport_offset(packet)
+    if result is None:
+        return None
+    _, offset = result
+    if len(packet) < offset + 4:
+        return None
+    src_ip = ipaddress.IPv6Address(bytes(packet[8:24]))
+    dst_ip = ipaddress.IPv6Address(bytes(packet[24:40]))
+
+    src_port, dst_port = struct.unpack_from(
+        "!HH",
+        packet,
+        offset,
+    )
+    return FlowKey(
+        src_ip,
+        dst_ip,
+        src_port,
+        dst_port,
+    )
+
+
+def replace_ipv6_flow(
+    packet: bytearray,
+    src_ip: ipaddress.IPv6Address,
+    dst_ip: ipaddress.IPv6Address,
+    src_port: int,
+    dst_port: int,
+):
+    result = get_ipv6_transport_offset(packet)
+    if result is None:
+        raise ValueError("not IPv6 TCP/UDP packet")
+    _, offset = result
+    packet[8:24] = src_ip.packed
+    packet[24:40] = dst_ip.packed
+    struct.pack_into(
+        "!HH",
+        packet,
+        offset,
         src_port,
         dst_port,
     )
@@ -128,6 +220,63 @@ def update_ipv4_udp_checksum(packet: bytearray) -> None:
             ]
         )
         + struct.pack("!H", udp_length)
+    )
+    udp_data = packet[udp_offset : udp_offset + udp_length]
+    csum = checksum(pseudo_header + udp_data)
+    if csum == 0:
+        csum = 0xFFFF
+    struct.pack_into(
+        "!H",
+        packet,
+        checksum_offset,
+        csum,
+    )
+
+
+def update_ipv6_tcp_checksum(packet: bytearray) -> None:
+    result = get_ipv6_transport_offset(packet)
+    if result is None or result[0] != 6:
+        raise ValueError("not IPv6 TCP packet")
+    _, tcp_offset = result
+    payload_length = struct.unpack_from("!H", packet, 4)[0]
+    tcp_length = payload_length - (tcp_offset - 40)
+    checksum_offset = tcp_offset + 16
+    packet[checksum_offset : checksum_offset + 2] = b"\x00\x00"
+    pseudo_header = (
+        bytes(packet[8:24])
+        + bytes(packet[24:40])
+        + struct.pack("!I", tcp_length)
+        + b"\x00\x00\x00"
+        + bytes([6])
+    )
+    tcp_data = packet[tcp_offset : tcp_offset + tcp_length]
+    csum = checksum(pseudo_header + tcp_data)
+    struct.pack_into(
+        "!H",
+        packet,
+        checksum_offset,
+        csum,
+    )
+
+
+def update_ipv6_udp_checksum(packet: bytearray) -> None:
+    result = get_ipv6_transport_offset(packet)
+    if result is None or result[0] != 17:
+        raise ValueError("not IPv6 UDP packet")
+    _, udp_offset = result
+    udp_length = struct.unpack_from(
+        "!H",
+        packet,
+        udp_offset + 4,
+    )[0]
+    checksum_offset = udp_offset + 6
+    packet[checksum_offset : checksum_offset + 2] = b"\x00\x00"
+    pseudo_header = (
+        bytes(packet[8:24])
+        + bytes(packet[24:40])
+        + struct.pack("!I", udp_length)
+        + b"\x00\x00\x00"
+        + bytes([17])
     )
     udp_data = packet[udp_offset : udp_offset + udp_length]
     csum = checksum(pseudo_header + udp_data)

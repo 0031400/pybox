@@ -181,8 +181,8 @@ def create_inbound(config: InboundConfig) -> Inbound:
         return TunInbound(
             ipaddress.IPv4Address(config.tun_ipv4),
             ipaddress.IPv4Address(config.tun_next_ipv4),
-            None,
-            None,
+            ipaddress.IPv6Address(config.tun_ipv6),
+            ipaddress.IPv6Address(config.tun_next_ipv6),
         )
     raise RuntimeError("unsupport inbound type")
 
