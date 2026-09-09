@@ -146,9 +146,8 @@ def create_dns_server(config: DnsServerConfig) -> DnsServer:
         if not config.server or not config.server_port:
             raise RuntimeError("udp dns server error")
         return UdpDnsServer(
-            config.server,
+            ipaddress.ip_address(config.server),
             config.server_port,
-            bootstrap_address_ip,
         )
     elif config.type == "tls":
         if (
